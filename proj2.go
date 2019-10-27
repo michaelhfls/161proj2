@@ -82,12 +82,21 @@ func bytesToUUID(data []byte) (ret uuid.UUID) {
 
 // The structure definition for a user record. Sign this every time it is uploaded.
 type User struct {
-	Username string 
-	var Files map[string]string // Dictionary with key = encrypted hashed file names, value = encrypted UUID of File-User Node
+	Username string
+	Files map[string]string
+	// Dictionary with key = encrypted hashed file names, value = encrypted UUID of File-User Node
 
 	// Note for JSON to marshal/unmarshal, the fields need to
 	// be public (start with a capital letter)
 }
+
+func NewUser(username string) *User {
+	var u User
+	u.Username = username
+	u.Files = make(map[string]string)
+	return &u
+}
+
 
 // When initializing a user, this function is called to upload
 // the user's public keys onto Keystore.
@@ -95,7 +104,7 @@ func InitKeys() {
 
 }
 
-// Call this function to retrieve the user's deterministic keys in a 
+// Call this function to retrieve the user's deterministic keys in a
 // stateless manner. We should have one of these for each specific key we need!
 func RetrieveKeys(username string, password string) {
 
@@ -141,11 +150,20 @@ func GetUserUUID (username string, password string) {
 // keystore and the datastore functions in the userlib library.
 
 // You can assume the user has a STRONG password
-func InitUser(username string, password string) (userdataptr *User, err error) {
-	var userdata User
-	userdataptr = &userdata
+func HKDF(key []byte, msg []byte) ([]byte, []byte, []byte, []byte) {
+	hmac := userlib.hmacEval(key, msg)
+	return hmac[0:16], hmac[16:32], hmac[32:48], hmac[48, 64]
+}
 
-	return &userdata, nil
+func InitUser(username string, password string) (userdataptr *User, err error) {
+	hash := userlib.argon2Key([]byte(username + password), userlib.randomBytes(16), 16)
+	key1, key2, key3, key4 := HKDF(hash, userlib.randomBytes(16))
+	uuid := uuid.FromBytes(key1)
+	ud := NewUser(username)
+	serial_ud, _ := json.Marshal(ud)
+	encrypt_ud = userlib.symEnc(key2, userlib.randomBytes(16), serial_ud)
+	userlib.datastoreSet(uuid, encrypt_ud)
+	return &ud, nil
 }
 
 // This fetches the user information from the Datastore.  It should
