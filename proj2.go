@@ -78,13 +78,52 @@ func bytesToUUID(data []byte) (ret uuid.UUID) {
 	return
 }
 
-// The structure definition for a user record
-type User struct {
-	Username string
+// START CODE HERE
 
-	// You can add other fields here if you want...
+// The structure definition for a user record. Sign this every time it is uploaded.
+type User struct {
+	Username string 
+	var Files map[string]string // Dictionary with key = encrypted hashed file names, value = encrypted UUID of File-User Node
+
 	// Note for JSON to marshal/unmarshal, the fields need to
 	// be public (start with a capital letter)
+}
+
+// When initializing a user, this function is called to upload
+// the user's public keys onto Keystore.
+func InitKeys() {
+
+}
+
+// Call this function to retrieve the user's deterministic keys in a 
+// stateless manner. We should have one of these for each specific key we need!
+func RetrieveKeys(username string, password string) {
+
+}
+
+// Retrieve the user's private encryption key.
+func GetPrivEncrKey() {
+
+}
+
+// Retrieve the user's private signature key.
+func GetPrivSigKey() {
+
+}
+
+// Retrieve the public encryption key in Keystore under the name username.
+func GetPublicEncrKey(username string) {
+
+}
+
+// Retrieve the public signature key in Keystore under the name username.
+func GetPublicSigKey(username string) {
+
+}
+
+// Retrieve the UUID associated with the userdata.
+func GetUserUUID (username string, password string) {
+
 }
 
 // This creates a user.  It will only be called once for a user
