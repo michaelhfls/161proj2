@@ -158,7 +158,7 @@ func HKDF(key []byte, msg []byte) ([]byte, []byte, []byte, []byte) {
 func InitUser(username string, password string) (userdataptr *User, err error) {
 	hash := userlib.argon2Key([]byte(username + password), userlib.randomBytes(16), 16)
 	key1, key2, key3, key4 := HKDF(hash, userlib.randomBytes(16))
-	uuid := uuid.FromBytes(key1)
+	uuid := bytesToUUID(key1)
 	ud := NewUser(username)
 	serial_ud, _ := json.Marshal(ud)
 	encrypt_ud = userlib.symEnc(key2, userlib.randomBytes(16), serial_ud)
