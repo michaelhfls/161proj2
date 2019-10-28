@@ -90,11 +90,13 @@ type User struct {
 	// be public (start with a capital letter)
 }
 
+// I created extra blob structure so we have a way to store encrypted userdata and hmac
 type Blob struct {
 	encrypt_ud []byte
 	hmac []byte
 }
 
+//init func for user object
 func NewUser(username string) *User {
 	var u User
 	u.Username = username
@@ -102,6 +104,7 @@ func NewUser(username string) *User {
 	return &u
 }
 
+//init func for blob object
 func NewBlob(encrypt_ud []byte, hmac []byte) *Blob{
 	var b Blob
 	b.encrypt_ud = encrypt_ud
@@ -163,14 +166,17 @@ func GetUserUUID (username string, password string) {
 // keystore and the datastore functions in the userlib library.
 
 // You can assume the user has a STRONG password
-func HKDF(key []byte, msg []byte) ([]byte, []byte, []byte, []byte) {
+
+//creates three symmetric keys
+func HKDF(key []byte, msg []byte) ([]byte, []byte, []byte) {
 	hmac, _ := userlib.HMACEval(key, msg)
-	return hmac[0:16], hmac[16:32], hmac[32:48], hmac[48:64]
+	return hmac[0:16], hmac[16:32], hmac[32:48]
 }
+
 
 func InitUser(username string, password string) (userdataptr *User, err error) {
 	hash := userlib.Argon2Key([]byte(password), []byte(username), 16)
-	key1, key2, key3, key4 := HKDF(hash, []byte(username + password))
+	key1, key2, key3 := HKDF(hash, []byte(username + password))
 	uuid := bytesToUUID(key1)
 	ud := NewUser(username)
 	serial_ud, _ := json.Marshal(ud)
@@ -178,6 +184,7 @@ func InitUser(username string, password string) (userdataptr *User, err error) {
 	hmac, _ := userlib.HMACEval(key3, encrypt_ud)
 	blob := NewBlob(encrypt_ud, hmac)
 	serial_blob, _ := json.Marshal(blob)
+	fmt.Println(serial_blob)
 	userlib.DatastoreSet(uuid, serial_blob)
 	return ud, nil
 }
@@ -187,22 +194,23 @@ func InitUser(username string, password string) (userdataptr *User, err error) {
 // data was corrupted, or if the user can't be found.
 func GetUser(username string, password string) (userdataptr *User, err error) {
 	hash := userlib.Argon2Key([]byte(password), []byte(username), 16)
-	key1, key2, key3, key4 := HKDF(hash, []byte(username + password))
+	key1, key2, key3 := HKDF(hash, []byte(username + password))
 	uuid := bytesToUUID(key1)
+
 	serial_blob, boolean := userlib.DatastoreGet(uuid)
 	if boolean == false {
 		error := errors.New("user cannot be found")
-		fmt.Println(error)
 		return nil, error
 	}
 	var blob Blob
 	json.Unmarshal(serial_blob, &blob)
+	fmt.Println(blob)
 	hmaccheck, _ := userlib.HMACEval(key3, blob.encrypt_ud)
 	if userlib.HMACEqual(blob.hmac, hmaccheck) == false {
 		error := errors.New("user file was corrupted")
-		fmt.Println(error)
 		return nil, error
 	}
+
 	decrypt_ud := userlib.SymDec(key2, blob.encrypt_ud)
 	var ud *User
 	json.Unmarshal(decrypt_ud, ud)
