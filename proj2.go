@@ -84,35 +84,54 @@ func bytesToUUID(data []byte) (ret uuid.UUID) {
 // The structure definition for a user record. Sign this every time it is uploaded.
 type User struct {
 	Username string
-	Files map[string]string
-	// Dictionary with key = encrypted hashed file names, value = encrypted UUID of File-User Node
+	Files map[string]string // Dictionary with key = encrypted hashed file names, value = encrypted UUID of File-User Node
+	DecKey userlib.PKEDecKey
+	SignKey userlib.DSSignKey
+
 	// Note for JSON to marshal/unmarshal, the fields need to
 	// be public (start with a capital letter)
 }
 
-// I created extra blob structure so we have a way to store encrypted userdata and hmac
-type Blob struct {
-	encrypt_ud []byte
-	hmac []byte
-}
-
 //init func for user object
-func NewUser(username string) *User {
+func NewUser(username string) (*User, error) {
 	var u User
 	u.Username = username
 	u.Files = make(map[string]string)
-	return &u
+
+	// TODO: Set encryption and signature keys, upload onto Keystore
+	encKey, decKey, err := userlib.PKEKeyGen()
+	if err == nil {
+		signKey, verifyKey, err := userlib.DSKeyGen()
+		if err == nil {
+			err := userlib.KeystoreSet(u.Username + "enc", encKey)
+			if err == nil {
+				err := userlib.KeystoreSet(u.Username + "sign", verifyKey)
+				if err == nil {
+					u.DecKey = decKey
+					u.SignKey = signKey
+				}
+			}
+		}
+	}
+	return &u, err
+}
+
+// I created extra blob structure so we have a way to store encrypted userdata and hmac
+type Blob struct {
+	EncryptUD []byte
+	Hmac []byte
+
+	// Note for JSON to marshal/unmarshal, the fields need to
+	// be public (start with a capital letter)
 }
 
 //init func for blob object
-func NewBlob(encrypt_ud []byte, hmac []byte) *Blob{
+func NewBlob(EncryptUD []byte, Hmac []byte) *Blob{
 	var b Blob
-	b.encrypt_ud = encrypt_ud
-	b.hmac = hmac
+	b.EncryptUD = EncryptUD
+	b.Hmac = Hmac
 	return &b
 }
-
-
 
 // When initializing a user, this function is called to upload
 // the user's public keys onto Keystore.
@@ -151,6 +170,12 @@ func GetUserUUID (username string, password string) {
 
 }
 
+//creates three symmetric keys
+func HKDF(key []byte, msg []byte) ([]byte, []byte, []byte) {
+	hmac, _ := userlib.HMACEval(key, msg)
+	return hmac[0:16], hmac[16:32], hmac[32:48]
+}
+
 // This creates a user.  It will only be called once for a user
 // (unless the keystore and datastore are cleared during testing purposes)
 
@@ -166,27 +191,40 @@ func GetUserUUID (username string, password string) {
 // keystore and the datastore functions in the userlib library.
 
 // You can assume the user has a STRONG password
-
-//creates three symmetric keys
-func HKDF(key []byte, msg []byte) ([]byte, []byte, []byte) {
-	hmac, _ := userlib.HMACEval(key, msg)
-	return hmac[0:16], hmac[16:32], hmac[32:48]
-}
-
-
 func InitUser(username string, password string) (userdataptr *User, err error) {
+	// Create deterministic keys and UUID for the userdata
 	hash := userlib.Argon2Key([]byte(password), []byte(username), 16)
-	key1, key2, key3 := HKDF(hash, []byte(username + password))
-	uuid := bytesToUUID(key1)
-	ud := NewUser(username)
-	serial_ud, _ := json.Marshal(ud)
-	encrypt_ud := userlib.SymEnc(key2, userlib.RandomBytes(16), serial_ud)
-	hmac, _ := userlib.HMACEval(key3, encrypt_ud)
-	blob := NewBlob(encrypt_ud, hmac)
-	serial_blob, _ := json.Marshal(blob)
-	fmt.Println(serial_blob)
-	userlib.DatastoreSet(uuid, serial_blob)
-	return ud, nil
+	uuidKey, encrKey, hmacKey := HKDF(hash, []byte(username + password))
+	uuidUD := bytesToUUID(uuidKey)
+	ud, err := NewUser(username)
+
+	// Error check
+	if err != nil {
+		return nil, err
+	}
+
+	// Serialize, encrypt, and HMAC the userdata
+	serialUD, err1 := json.Marshal(ud)
+	encryptUD := userlib.SymEnc(encrKey, userlib.RandomBytes(16), serialUD)
+	hmac, err2 := userlib.HMACEval(hmacKey, encryptUD)
+
+	// Error check
+	if err1 != nil || err2 != nil {
+		return nil, err
+	}
+
+	// Serialize blob and upload to Datastore
+	blob := NewBlob(encryptUD, hmac)
+	serialBlob, err := json.Marshal(blob)
+	fmt.Println(serialBlob)
+	userlib.DatastoreSet(uuidUD, serialBlob)
+
+	// Error check
+	if err != nil {
+		return nil, err
+	}
+
+	return nil, err
 }
 
 // This fetches the user information from the Datastore.  It should
@@ -205,13 +243,13 @@ func GetUser(username string, password string) (userdataptr *User, err error) {
 	var blob Blob
 	json.Unmarshal(serial_blob, &blob)
 	fmt.Println(blob)
-	hmaccheck, _ := userlib.HMACEval(key3, blob.encrypt_ud)
-	if userlib.HMACEqual(blob.hmac, hmaccheck) == false {
+	hmaccheck, _ := userlib.HMACEval(key3, blob.EncryptUD)
+	if userlib.HMACEqual(blob.Hmac, hmaccheck) == false {
 		error := errors.New("user file was corrupted")
 		return nil, error
 	}
 
-	decrypt_ud := userlib.SymDec(key2, blob.encrypt_ud)
+	decrypt_ud := userlib.SymDec(key2, blob.EncryptUD)
 	var ud *User
 	json.Unmarshal(decrypt_ud, ud)
 	return ud, nil
