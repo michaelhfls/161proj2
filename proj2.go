@@ -4,6 +4,7 @@ package proj2
 // imports it will break the autograder, and we will be Very Upset.
 
 import (
+	"fmt"
 	// You neet to add with
 	// go get github.com/cs161-staff/userlib
 	"github.com/cs161-staff/userlib"
@@ -101,7 +102,7 @@ func NewUser(username string) *User {
 	return &u
 }
 
-func NewBlob(encrypt_ud []byte, hmac []byte) {
+func NewBlob(encrypt_ud []byte, hmac []byte) *Blob{
 	var b Blob
 	b.encrypt_ud = encrypt_ud
 	b.hmac = hmac
@@ -163,44 +164,49 @@ func GetUserUUID (username string, password string) {
 
 // You can assume the user has a STRONG password
 func HKDF(key []byte, msg []byte) ([]byte, []byte, []byte, []byte) {
-	hmac := userlib.hmacEval(key, msg)
-	return hmac[0:16], hmac[16:32], hmac[32:48], hmac[48, 64]
+	hmac, _ := userlib.HMACEval(key, msg)
+	return hmac[0:16], hmac[16:32], hmac[32:48], hmac[48:64]
 }
 
 func InitUser(username string, password string) (userdataptr *User, err error) {
-	hash := userlib.argon2Key([]byte(password), []byte(username), 16)
+	hash := userlib.Argon2Key([]byte(password), []byte(username), 16)
 	key1, key2, key3, key4 := HKDF(hash, []byte(username + password))
 	uuid := bytesToUUID(key1)
 	ud := NewUser(username)
 	serial_ud, _ := json.Marshal(ud)
-	encrypt_ud := userlib.symEnc(key2, userlib.randomBytes(16), serial_ud)
-	hmac, _ := userlib.hmacEval(key3, encrypt_ud)
+	encrypt_ud := userlib.SymEnc(key2, userlib.RandomBytes(16), serial_ud)
+	hmac, _ := userlib.HMACEval(key3, encrypt_ud)
 	blob := NewBlob(encrypt_ud, hmac)
 	serial_blob, _ := json.Marshal(blob)
-	userlib.datastoreSet(uuid, serial_blob)
-	return &ud, nil
+	userlib.DatastoreSet(uuid, serial_blob)
+	return ud, nil
 }
 
 // This fetches the user information from the Datastore.  It should
 // fail with an error if the user/password is invalid, or if the user
 // data was corrupted, or if the user can't be found.
 func GetUser(username string, password string) (userdataptr *User, err error) {
-	hash := userlib.argon2Key([]byte(password), []byte(username), 16)
+	hash := userlib.Argon2Key([]byte(password), []byte(username), 16)
 	key1, key2, key3, key4 := HKDF(hash, []byte(username + password))
 	uuid := bytesToUUID(key1)
-	serial_blob, boolean := userlib.datastoreGet(uuid)
+	serial_blob, boolean := userlib.DatastoreGet(uuid)
 	if boolean == false {
-		return errors.New("user cannot be found")
+		error := errors.New("user cannot be found")
+		fmt.Println(error)
+		return nil, error
 	}
 	var blob Blob
 	json.Unmarshal(serial_blob, &blob)
-	if userlib.hmacEqual(blob.hmac, userlib.hmacEval(key3, blob.encrypt_ud)) == false {
-		return errors.New("user file was corrupted")
+	hmaccheck, _ := userlib.HMACEval(key3, blob.encrypt_ud)
+	if userlib.HMACEqual(blob.hmac, hmaccheck) == false {
+		error := errors.New("user file was corrupted")
+		fmt.Println(error)
+		return nil, error
 	}
-	decrypt_ud := userlib.symDec(key2, blob.encrypt_ud)
-	var ud User
-	json.Unmarshal(decrypt_ud, &ud)
-	return &ud, nil
+	decrypt_ud := userlib.SymDec(key2, blob.encrypt_ud)
+	var ud *User
+	json.Unmarshal(decrypt_ud, ud)
+	return ud, nil
 }
 
 // This stores a file in the datastore.
