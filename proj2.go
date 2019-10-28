@@ -156,12 +156,12 @@ func HKDF(key []byte, msg []byte) ([]byte, []byte, []byte, []byte) {
 }
 
 func InitUser(username string, password string) (userdataptr *User, err error) {
-	hash := userlib.argon2Key([]byte(username + password), userlib.randomBytes(16), 16)
-	key1, key2, key3, key4 := HKDF(hash, userlib.randomBytes(16))
+	hash := userlib.argon2Key([]byte(password), []byte(username), 16)
+	key1, key2, key3, key4 := HKDF(hash, []byte(username + password))
 	uuid := bytesToUUID(key1)
 	ud := NewUser(username)
 	serial_ud, _ := json.Marshal(ud)
-	encrypt_ud = userlib.symEnc(key2, userlib.randomBytes(16), serial_ud)
+	encrypt_ud := userlib.symEnc(key2, userlib.randomBytes(16), serial_ud)
 	userlib.datastoreSet(uuid, encrypt_ud)
 	return &ud, nil
 }
@@ -170,10 +170,17 @@ func InitUser(username string, password string) (userdataptr *User, err error) {
 // fail with an error if the user/password is invalid, or if the user
 // data was corrupted, or if the user can't be found.
 func GetUser(username string, password string) (userdataptr *User, err error) {
-	var userdata User
-	userdataptr = &userdata
-
-	return userdataptr, nil
+	hash := userlib.argon2Key([]byte(password), []byte(username), 16)
+	key1, key2, key3, key4 := HKDF(hash, []byte(username + password))
+	uuid := bytesToUUID(key1)
+	encrypt_ud, boolean := userlib.datastoreGet(uuid)
+	if boolean == false {
+		return errors.New("user cannot be found")
+	}
+	decrypt_ud := userlib.symDec(key2, encrypt_ud)
+	var ud User
+	deserial_ud := json.Unmarshal(decrypt_ud, &ud)
+	return &ud, nil
 }
 
 // This stores a file in the datastore.
