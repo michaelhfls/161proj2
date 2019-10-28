@@ -4,7 +4,6 @@ package proj2
 // imports it will break the autograder, and we will be Very Upset.
 
 import (
-	"fmt"
 	// You neet to add with
 	// go get github.com/cs161-staff/userlib
 	"github.com/cs161-staff/userlib"
@@ -85,6 +84,7 @@ func bytesToUUID(data []byte) (ret uuid.UUID) {
 type User struct {
 	Username string
 	Files map[string]string
+
 	// Dictionary with key = encrypted hashed file names, value = encrypted UUID of File-User Node
 	// Note for JSON to marshal/unmarshal, the fields need to
 	// be public (start with a capital letter)
@@ -92,8 +92,8 @@ type User struct {
 
 // I created extra blob structure so we have a way to store encrypted userdata and hmac
 type Blob struct {
-	encrypt_ud []byte
-	hmac []byte
+	Encrypt_ud []byte
+	Hmac []byte
 }
 
 //init func for user object
@@ -105,11 +105,11 @@ func NewUser(username string) *User {
 }
 
 //init func for blob object
-func NewBlob(encrypt_ud []byte, hmac []byte) *Blob{
+func NewBlob(encrypt_ud []byte, hmac []byte) Blob{
 	var b Blob
-	b.encrypt_ud = encrypt_ud
-	b.hmac = hmac
-	return &b
+	b.Encrypt_ud = encrypt_ud
+	b.Hmac = hmac
+	return b
 }
 
 
@@ -184,7 +184,6 @@ func InitUser(username string, password string) (userdataptr *User, err error) {
 	hmac, _ := userlib.HMACEval(key3, encrypt_ud)
 	blob := NewBlob(encrypt_ud, hmac)
 	serial_blob, _ := json.Marshal(blob)
-	fmt.Println(serial_blob)
 	userlib.DatastoreSet(uuid, serial_blob)
 	return ud, nil
 }
@@ -198,30 +197,29 @@ func GetUser(username string, password string) (userdataptr *User, err error) {
 	uuid := bytesToUUID(key1)
 
 	serial_blob, boolean := userlib.DatastoreGet(uuid)
+
 	if boolean == false {
 		error := errors.New("user cannot be found")
 		return nil, error
 	}
 	var blob Blob
 	json.Unmarshal(serial_blob, &blob)
-	fmt.Println(blob)
-	hmaccheck, _ := userlib.HMACEval(key3, blob.encrypt_ud)
-	if userlib.HMACEqual(blob.hmac, hmaccheck) == false {
+	hmaccheck, _ := userlib.HMACEval(key3, blob.Encrypt_ud)
+	if userlib.HMACEqual(blob.Hmac, hmaccheck) == false {
 		error := errors.New("user file was corrupted")
 		return nil, error
 	}
-
-	decrypt_ud := userlib.SymDec(key2, blob.encrypt_ud)
-	var ud *User
-	json.Unmarshal(decrypt_ud, ud)
-	return ud, nil
+	decrypt_ud := userlib.SymDec(key2, blob.Encrypt_ud)
+	var ud User
+	json.Unmarshal(decrypt_ud, &ud)
+	return &ud, nil
 }
 
 // This stores a file in the datastore.
 //
 // The name and length of the file should NOT be revealed to the datastore!
 func (userdata *User) StoreFile(filename string, data []byte) {
-	return
+
 }
 
 // This adds on to an existing file.
