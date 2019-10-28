@@ -85,9 +85,13 @@ type User struct {
 	Username string
 	Files map[string]string
 	// Dictionary with key = encrypted hashed file names, value = encrypted UUID of File-User Node
-
 	// Note for JSON to marshal/unmarshal, the fields need to
 	// be public (start with a capital letter)
+}
+
+type Blob struct {
+	encrypt_ud []byte
+	hmac []byte
 }
 
 func NewUser(username string) *User {
@@ -96,6 +100,14 @@ func NewUser(username string) *User {
 	u.Files = make(map[string]string)
 	return &u
 }
+
+func NewBlob(encrypt_ud []byte, hmac []byte) {
+	var b Blob
+	b.encrypt_ud = encrypt_ud
+	b.hmac = hmac
+	return &b
+}
+
 
 
 // When initializing a user, this function is called to upload
@@ -162,7 +174,10 @@ func InitUser(username string, password string) (userdataptr *User, err error) {
 	ud := NewUser(username)
 	serial_ud, _ := json.Marshal(ud)
 	encrypt_ud := userlib.symEnc(key2, userlib.randomBytes(16), serial_ud)
-	userlib.datastoreSet(uuid, encrypt_ud)
+	hmac, _ := userlib.hmacEval(key3, encrypt_ud)
+	blob := NewBlob(encrypt_ud, hmac)
+	serial_blob, _ := json.Marshal(blob)
+	userlib.datastoreSet(uuid, serial_blob)
 	return &ud, nil
 }
 
@@ -173,13 +188,18 @@ func GetUser(username string, password string) (userdataptr *User, err error) {
 	hash := userlib.argon2Key([]byte(password), []byte(username), 16)
 	key1, key2, key3, key4 := HKDF(hash, []byte(username + password))
 	uuid := bytesToUUID(key1)
-	encrypt_ud, boolean := userlib.datastoreGet(uuid)
+	serial_blob, boolean := userlib.datastoreGet(uuid)
 	if boolean == false {
 		return errors.New("user cannot be found")
 	}
-	decrypt_ud := userlib.symDec(key2, encrypt_ud)
+	var blob Blob
+	json.Unmarshal(serial_blob, &blob)
+	if userlib.hmacEqual(blob.hmac, userlib.hmacEval(key3, blob.encrypt_ud)) == false {
+		return errors.New("user file was corrupted")
+	}
+	decrypt_ud := userlib.symDec(key2, blob.encrypt_ud)
 	var ud User
-	deserial_ud := json.Unmarshal(decrypt_ud, &ud)
+	json.Unmarshal(decrypt_ud, &ud)
 	return &ud, nil
 }
 
