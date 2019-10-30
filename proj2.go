@@ -155,18 +155,20 @@ type UserFile struct {
 	Children map[string]uuid.UUID // list of descendents with access to file. username - uuid
 	Parent uuid.UUID // uuid of parent that gave this user access
 	SavedMeta map[int][4][]byte
+	SavedMetaDS [2][]byte // first element is username, second element is DS of user
 	ChangesMeta map[int][4][]byte
 
 	// Note for JSON to marshal/unmarshal, the fields need to
 	// be public (start with a capital letter)
 }
 
-func (userdata *User) NewUserFile(parent uuid.UUID, savedMeta map[int][4][]byte, changesMeta map[int][4][]byte) *UserFile{
+func (userdata *User) NewUserFile(parent uuid.UUID, savedMeta map[int][4][]byte, savedMetaDS [2][]byte, changesMeta map[int][4][]byte) *UserFile{
 	var f UserFile
 	f.Username = userdata.Username
 	f.Children = make(map[string]uuid.UUID)
 	f.Parent = parent
 	f.SavedMeta = savedMeta
+	f.SavedMetaDS = savedMetaDS
 	f.ChangesMeta = changesMeta
 	return &f
 }
@@ -383,7 +385,7 @@ func (userdata *User) StoreFile(filename string, data []byte) {
 	uuidFile, encKey := UploadFile(data, userdata.SignKey)
 
 	// Create User File and upload to datastore
-	userFile := userdata.NewUserFile(uuid.Nil, make(map[int][4][]byte), make(map[int][4][]byte))
+	userFile := userdata.NewUserFile(uuid.Nil, make(map[int][4][]byte), [2][]byte{}, make(map[int][4][]byte))
 	userFile.UpdateMetadata(userdata.Username, userdata, uuidFile, encKey)
 
 	serialUserFile, _ := json.Marshal(userFile)
@@ -440,11 +442,57 @@ func (userdata *User) LoadFile(filename string) (data []byte, err error) {
 	if err != nil {
 		return nil, err
 	}
-	// verify saved
-	// verify changes
+	if userFile.SavedMeta != nil {
+		userFile.VerifyUserPermissions(string(userFile.SavedMetaDS[0]))
+		msg, _ := json.Marshal(userFile.SavedMeta)
+		key, _ := GetPublicVerKey(string(userFile.SavedMetaDS[0]))
+		err := userlib.DSVerify(key, msg, userFile.SavedMetaDS[1])
+
+		// Error check
+		if err != nil {
+			return nil, err
+		}
+
+		// calculate saved now
+		// by decrypting all of it. we do not need to check for approved users in saved
+
+	}
+	for element := range userFile.ChangesMeta {
+		// verify changes by checking that the username has access, then check signature,
+		// then decrypt uuid/key then decrypt file
+	}
+
 	return
 }
 
+func (userFile *UserFile) VerifyUserPermissions(username string) bool {
+	visited := make(map[string]bool)
+	return userFile.Search(username, visited)
+}
+
+func (userFile *UserFile) Search(username string, visited map[string]bool) bool {
+	if _, ok := userFile.Children[username]; ok || userFile.Username == username{
+		return true
+	}
+
+	visited[userFile.Username] = true
+	uf, err := RetrieveUserFile(userFile.Parent)
+	if err == nil && !visited[uf.Username] {
+		if uf.Search(username, visited) {
+			return true
+		}
+	}
+
+	for _, uuidUF := range userFile.Children {
+		uf, err = RetrieveUserFile(uuidUF)
+		if err == nil && !visited[uf.Username] {
+			if uf.Search(username, visited) {
+				return true
+			}
+		}
+	}
+	return false
+}
 // This creates a sharing record, which is a key pointing to something
 // in the datastore to share with the recipient.
 
