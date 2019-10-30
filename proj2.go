@@ -324,20 +324,28 @@ func GetUser(username string, password string) (userdataptr *User, err error) {
 	return &ud, nil
 }
 
+// Encrypts file with random key, signs it with user's sign key, and
+// put into Blob structure and upload to datastore
+func UploadFile(data []byte, signKey userlib.DSSignKey) (uuid.UUID, []byte, *Blob){
+	encKey := userlib.RandomBytes(16)
+	encryptedData := userlib.SymEnc(encKey, userlib.RandomBytes(16), data)
+	ds, _ := userlib.DSSign(signKey, encryptedData)
+
+	blob := NewBlob(encryptedData, ds)
+	serialBlob, _ := json.Marshal(blob)
+	uuidFile := uuid.New()
+	userlib.DatastoreSet(uuidFile, serialBlob)
+
+	return uuidFile, encKey, blob
+}
+
 // This stores a file in the datastore.
 //
 // The name and length of the file should NOT be revealed to the datastore!
 // key length: 16 bytes ..
 func (userdata *User) StoreFile(filename string, data []byte) {
 	// Encrypt and sign file, upload Blob to datastore
-	encKey := userlib.RandomBytes(16)
-	encryptedData := userlib.SymEnc(encKey, userlib.RandomBytes(16), data)
-	ds, _ := userlib.DSSign(userdata.SignKey, encryptedData)
-
-	blob := NewBlob(encryptedData, ds)
-	serialBlob, _ := json.Marshal(blob)
-	uuidFile := uuid.New()
-	userlib.DatastoreSet(uuidFile, serialBlob)
+	uuidFile, encKey, blob := UploadFile(data, userdata.SignKey)
 
 	// Create User File and upload to datastore
 	userFile := userdata.NewUserFile(uuid.Nil, make(map[int][4][]byte), make(map[int][4][]byte))
@@ -348,10 +356,23 @@ func (userdata *User) StoreFile(filename string, data []byte) {
 	userlib.DatastoreSet(uuidUserFile, serialUserFile)
 
 	// Update userdata and upload to datastore
-	// TODO: figure out how to encrypt and hash the file name !!
-	userdata.Files["gibberish"] = uuidUserFile.String()
+	userdata.SetFileNameToUUID(uuidUserFile)
+
 	// TODO: Need to reupload user -- so should we store sym enc key, hmac, and its uuid??
-	err = blob.UploadUser(userdata, encKey, hmacKey, uuid)
+	// err = blob.UploadUser(userdata, encKey, hmacKey, uuid)
+}
+
+func (userdata *User) SetFileNameToUUID(uuid uuid.UUID) {
+	// TODO: figure out how to encrypt and hash the file name !!
+
+	userdata.Files["gibberish"] = uuid.String()
+}
+
+func (userdata *User) GetUUIDFromFileName(filename string) (uuidFile uuid.UUID) {
+	// TODO: figure out how to encrypt and hash the file name !!
+
+	uuidFile, _ = uuid.Parse(userdata.Files[filename])
+	return
 }
 
 // This adds on to an existing file.
@@ -361,6 +382,11 @@ func (userdata *User) StoreFile(filename string, data []byte) {
 // metadata you need.
 
 func (userdata *User) AppendFile(filename string, data []byte) (err error) {
+	uuidFile, encKey, blob := UploadFile(data, userdata.SignKey)
+	userdata.GetUUIDFromFileName(filename)
+	// need to retrieve the userfile and then find parent and then update...all...ofthe metadata :(
+	//userFile.UpdateMetadata(userdata.Username, userdata, uuidFile, encKey)
+
 	return
 }
 
