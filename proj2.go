@@ -55,7 +55,7 @@ func someUsefulThings() {
 	d, _ := json.Marshal(f)
 	userlib.DebugMsg("The json data: %v", string(d))
 	var g uuid.UUID
-	json.Unmarshal(d, &g)
+	_ = json.Unmarshal(d, &g)
 	userlib.DebugMsg("Unmashaled data %v", g.String())
 
 	// This creates an error type
@@ -86,6 +86,11 @@ type User struct {
 	Files map[string]string // Dictionary with key = encrypted hashed file names, value = encrypted UUID of File-User Node
 	DecKey userlib.PKEDecKey // Key that decrypts user's public key
 	SignKey userlib.DSSignKey // Key that signs, can be verified with user's public key
+
+	// Info to re-upload userdata :( we should think of another design tbh
+	UUID uuid.UUID
+	EncKey []byte
+	HMACKey []byte
 
 	// Note for JSON to marshal/unmarshal, the fields need to
 	// be public (start with a capital letter)
@@ -146,6 +151,7 @@ func (blob *Blob) VerifyHMAC(key []byte) (verify bool, err error) {
 
 // The structure definition for a user file node. Not encrypted.
 type UserFile struct {
+	Username string
 	Children map[string]uuid.UUID // list of descendents with access to file. username - uuid
 	Parent uuid.UUID // uuid of parent that gave this user access
 	SavedMeta map[int][4][]byte
@@ -157,11 +163,25 @@ type UserFile struct {
 
 func (userdata *User) NewUserFile(parent uuid.UUID, savedMeta map[int][4][]byte, changesMeta map[int][4][]byte) *UserFile{
 	var f UserFile
+	f.Username = userdata.Username
 	f.Children = make(map[string]uuid.UUID)
 	f.Parent = parent
 	f.SavedMeta = savedMeta
 	f.ChangesMeta = changesMeta
 	return &f
+}
+
+func RetrieveUserFile(uuidUF uuid.UUID) (*UserFile, error) {
+	serialUserFile, boolean := userlib.DatastoreGet(uuidUF)
+	if !boolean {
+		err := errors.New("file cannot be found")
+		return nil, err
+	}
+
+	var userFile UserFile
+	_ = json.Unmarshal(serialUserFile, &userFile)
+
+	return &userFile, nil
 }
 
 // Updates the metadata of a recipient's changes map, with a file update by sender
@@ -176,6 +196,17 @@ func (userFile *UserFile) UpdateMetadata(recipient string, sender *User, uuidFil
 	ds, _ := userlib.DSSign(sender.SignKey, []byte(msg))
 
 	userFile.ChangesMeta[len(userFile.ChangesMeta)] = [4][]byte{eUsername, eUUID, eKey, ds}
+}
+// Calls UpdateMetadata on this userfile and all of its children and its children...
+func (userFile *UserFile) UpdateAllMetadata(sender *User, uuidFile uuid.UUID, encKey []byte) {
+	userFile.UpdateMetadata(userFile.Username, sender, uuidFile, encKey)
+	if len(userFile.Children) != 0 { // TODO: add another bool later to verify DS when we share access
+		for name, uuidChild := range userFile.Children {
+			userFile, _ = RetrieveUserFile(uuidChild)
+			userFile.UpdateMetadata(name, sender, uuidFile, encKey)
+			userFile.UpdateAllMetadata(sender, uuidFile, encKey)
+		}
+	}
 }
 
 // Call this function to retrieve the user's deterministic keys in a
@@ -242,6 +273,11 @@ func InitUser(username string, password string) (userdataptr *User, err error) {
 		return nil, err
 	}
 
+	ud.UUID = uuidUD
+	ud.EncKey = encKey
+	ud.HMACKey = hmacKey
+
+
 	//// Serialize, encrypt, and HMAC the userdata
 	//serialUD, err1 := json.Marshal(ud)
 	//encryptUD := userlib.SymEnc(encKey, userlib.RandomBytes(16), serialUD)
@@ -261,7 +297,7 @@ func InitUser(username string, password string) (userdataptr *User, err error) {
 
 	// Upload userdata
 	var blob Blob
-	err = blob.UploadUser(ud, encKey, hmacKey, uuidUD)
+	err = ud.UploadUser(&blob)
 
 	// Error check
 	if err != nil {
@@ -272,11 +308,11 @@ func InitUser(username string, password string) (userdataptr *User, err error) {
 }
 
 // Uploads the userdata. Use this to also update userdata.
-func (blob *Blob) UploadUser(userdata *User, encKey []byte, hmacKey []byte, uuidUD uuid.UUID) error {
+func (userdata *User) UploadUser(blob *Blob) error {
 	// Serialize, encrypt, and HMAC the userdata
 	serialUD, err1 := json.Marshal(userdata)
-	encryptUD := userlib.SymEnc(encKey, userlib.RandomBytes(16), serialUD)
-	hmac, err2 := userlib.HMACEval(hmacKey, encryptUD)
+	encryptUD := userlib.SymEnc(userdata.EncKey, userlib.RandomBytes(16), serialUD)
+	hmac, err2 := userlib.HMACEval(userdata.HMACKey, encryptUD)
 
 	// Error check
 	if err1 != nil {
@@ -289,7 +325,7 @@ func (blob *Blob) UploadUser(userdata *User, encKey []byte, hmacKey []byte, uuid
 	blob.Data = encryptUD
 	blob.Check = hmac
 	serialBlob, err := json.Marshal(blob)
-	userlib.DatastoreSet(uuidUD, serialBlob)
+	userlib.DatastoreSet(userdata.UUID, serialBlob)
 
 	return err
 }
@@ -311,7 +347,7 @@ func GetUser(username string, password string) (userdataptr *User, err error) {
 	}
 
 	var blob Blob
-	json.Unmarshal(serialBlob, &blob)
+	_ = json.Unmarshal(serialBlob, &blob)
 
 	verify, err := blob.VerifyHMAC(hmacKey)
 	if err != nil || !verify {
@@ -320,23 +356,22 @@ func GetUser(username string, password string) (userdataptr *User, err error) {
 
 	decryptUD := userlib.SymDec(encKey, blob.Data)
 	var ud User
-	json.Unmarshal(decryptUD, &ud)
+	_ = json.Unmarshal(decryptUD, &ud)
 	return &ud, nil
 }
 
 // Encrypts file with random key, signs it with user's sign key, and
-// put into Blob structure and upload to datastore
-func UploadFile(data []byte, signKey userlib.DSSignKey) (uuid.UUID, []byte, *Blob){
-	encKey := userlib.RandomBytes(16)
+// puts into Blob structure and upload to datastore
+func UploadFile(data []byte, signKey userlib.DSSignKey) (uuid.UUID, []byte){
+		encKey := userlib.RandomBytes(16)
 	encryptedData := userlib.SymEnc(encKey, userlib.RandomBytes(16), data)
 	ds, _ := userlib.DSSign(signKey, encryptedData)
 
-	blob := NewBlob(encryptedData, ds)
-	serialBlob, _ := json.Marshal(blob)
+	serialBlob, _ := json.Marshal(NewBlob(encryptedData, ds))
 	uuidFile := uuid.New()
 	userlib.DatastoreSet(uuidFile, serialBlob)
 
-	return uuidFile, encKey, blob
+	return uuidFile, encKey
 }
 
 // This stores a file in the datastore.
@@ -345,33 +380,31 @@ func UploadFile(data []byte, signKey userlib.DSSignKey) (uuid.UUID, []byte, *Blo
 // key length: 16 bytes ..
 func (userdata *User) StoreFile(filename string, data []byte) {
 	// Encrypt and sign file, upload Blob to datastore
-	uuidFile, encKey, blob := UploadFile(data, userdata.SignKey)
+	uuidFile, encKey := UploadFile(data, userdata.SignKey)
 
 	// Create User File and upload to datastore
 	userFile := userdata.NewUserFile(uuid.Nil, make(map[int][4][]byte), make(map[int][4][]byte))
 	userFile.UpdateMetadata(userdata.Username, userdata, uuidFile, encKey)
 
-	serialUserFile, _ := json.Marshal(blob)
+	serialUserFile, _ := json.Marshal(userFile)
 	uuidUserFile := uuid.New()
 	userlib.DatastoreSet(uuidUserFile, serialUserFile)
 
 	// Update userdata and upload to datastore
-	userdata.SetFileNameToUUID(uuidUserFile)
-
-	// TODO: Need to reupload user -- so should we store sym enc key, hmac, and its uuid??
-	// err = blob.UploadUser(userdata, encKey, hmacKey, uuid)
+	userdata.SetFileNameToUUID(filename, uuidUserFile)
+	var blob *Blob
+	_ = userdata.UploadUser(blob)
 }
 
-func (userdata *User) SetFileNameToUUID(uuid uuid.UUID) {
-	// TODO: figure out how to encrypt and hash the file name !!
-
-	userdata.Files["gibberish"] = uuid.String()
+// Not encrypted bc thinking what's the point. Hashed tho to hide file name length
+func (userdata *User) SetFileNameToUUID(filename string, uuid uuid.UUID) {
+	name, _ := userlib.HMACEval(userdata.HMACKey, []byte(filename))
+	userdata.Files[string(name)] = uuid.String()
 }
 
 func (userdata *User) GetUUIDFromFileName(filename string) (uuidFile uuid.UUID) {
-	// TODO: figure out how to encrypt and hash the file name !!
-
-	uuidFile, _ = uuid.Parse(userdata.Files[filename])
+	name, _ := userlib.HMACEval(userdata.HMACKey, []byte(filename))
+	uuidFile, _ = uuid.Parse(userdata.Files[string(name)])
 	return
 }
 
@@ -382,18 +415,33 @@ func (userdata *User) GetUUIDFromFileName(filename string) (uuidFile uuid.UUID) 
 // metadata you need.
 
 func (userdata *User) AppendFile(filename string, data []byte) (err error) {
-	uuidFile, encKey, blob := UploadFile(data, userdata.SignKey)
-	userdata.GetUUIDFromFileName(filename)
-	// need to retrieve the userfile and then find parent and then update...all...ofthe metadata :(
-	//userFile.UpdateMetadata(userdata.Username, userdata, uuidFile, encKey)
+	uuidNewFile, encKey := UploadFile(data, userdata.SignKey)
+	uuidUserFile := userdata.GetUUIDFromFileName(filename)
 
-	return
+	// need to retrieve the userfile
+	userFile, err := RetrieveUserFile(uuidUserFile)
+	if err != nil {
+		return err
+	}
+	// retrieve owner of file
+	for ; userFile.Parent != uuid.Nil; {
+		userFile, _ = RetrieveUserFile(userFile.Parent)
+	}
+	// iterate through children...
+	userFile.UpdateAllMetadata(userdata, uuidNewFile, encKey)
+	return nil
 }
 
 // This loads a file from the Datastore.
 //
 // It should give an error if the file is corrupted in any way.
 func (userdata *User) LoadFile(filename string) (data []byte, err error) {
+	userFile, err := RetrieveUserFile(userdata.GetUUIDFromFileName(filename))
+	if err != nil {
+		return nil, err
+	}
+	// verify saved
+	// verify changes
 	return
 }
 
