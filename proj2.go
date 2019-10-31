@@ -154,7 +154,7 @@ type UserFile struct {
 	Username string
 	Children map[string]uuid.UUID // list of descendents with access to file. username - uuid
 	Parent uuid.UUID // uuid of parent that gave this user access
-	SavedMeta map[int][4][]byte
+	SavedMeta map[int][4][]byte // e(username), e(uuid), e(key), ds
 	SavedMetaDS [2][]byte // first element is username, second element is DS of user
 	ChangesMeta map[int][4][]byte
 
@@ -217,9 +217,10 @@ func RetrieveKeys(username string, password string) {
 
 }
 
-// Retrieve the user's private encryption key.
-func GetPrivEncKey() {
-
+// Decrypts ciphertext using the user's private decryption key.
+func (userdata *User) Decrypt(ciphertext []byte) (plaintext []byte, err error) {
+	plaintext, err = userlib.PKEDec(userdata.DecKey, plaintext)
+	return
 }
 
 // Retrieve the user's private signature key.
@@ -436,8 +437,13 @@ func (userdata *User) LoadFile(filename string) (data []byte, err error) {
 	if err != nil {
 		return nil, err
 	}
+
+	var file []byte
 	if userFile.SavedMeta != nil {
-		userFile.VerifyUserPermissions(string(userFile.SavedMetaDS[0]))
+		if !userFile.VerifyUserPermissions(string(userFile.SavedMetaDS[0])) {
+			return nil, errors.New("file was corrupted")
+		}
+
 		msg, _ := json.Marshal(userFile.SavedMeta)
 		key, _ := GetPublicVerKey(string(userFile.SavedMetaDS[0]))
 		err := userlib.DSVerify(key, msg, userFile.SavedMetaDS[1])
@@ -447,18 +453,91 @@ func (userdata *User) LoadFile(filename string) (data []byte, err error) {
 			return nil, err
 		}
 
-		// calculate saved now
-		// by decrypting all of it. we do not need to check for approved users in saved
+		// Evaluate items in SavedMeta. We do NOT need to verify each signature.
+		for _, elem := range userFile.SavedMeta {
+			fileBlock, err := EvaluateMetadata(userdata, elem,-1)
+			if err != nil {
+				return nil, err
+			}
+			file = append(file, fileBlock...)
+		}
+	}
 
+	// Evaluate items in ChangesMeta. We NEED to verify each signature.
+	// todo: maybe do a quick verify by passing all the checked users in one go...
+	for i, elem := range userFile.ChangesMeta {
+		fileBlock, err := EvaluateMetadata(userdata, elem, i)
+		if err != nil {
+			return nil, err
+		}
+		file = append(file, fileBlock...)
 	}
 	return
 }
 
+func EvaluateMetadata(user *User, meta [4][]byte, index int) ([]byte, error){
+	// Decrypt username, elem[0]
+	n, err0 := user.Decrypt(meta[0])
+	name := string(n)
+	verKey, ok := GetPublicVerKey(name)
+	if !ok {
+		return nil, errors.New("user's verification key does not exist")
+	}
+	
+	// Verify metadata first. Only for changeslist.
+	if index != -1 {
+		msg := string(index) + string(meta[1]) + string(meta[2])
+		err := userlib.DSVerify(verKey, []byte(msg), meta[3])
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	// Decrypt uuid, elem[1]
+	uuidByte, err1 := user.Decrypt(meta[1])
+	uuidBlob, err2 := uuid.ParseBytes(uuidByte)
+
+	if err0 != nil {
+		return nil, err0
+	} else if err1 != nil {
+		return nil, err1
+	} else if err2 != nil {
+		return nil, err2
+	}
+
+	// Retrieve the blob
+	serialBlob, ok := userlib.DatastoreGet(uuidBlob)
+	if !ok {
+		return nil, errors.New("file does not exist")
+	}
+
+	var blob Blob
+	_ = json.Unmarshal(serialBlob, &blob)
+
+	// Verify the blob's signature
+	err := userlib.DSVerify(verKey, blob.Data, blob.Check)
+	if err != nil {
+		return nil, err
+	}
+
+	// Decrypt key, elem[2], and decrypt file
+	eKey, err := user.Decrypt(meta[2])
+	if err != nil {
+		return nil, err
+	}
+
+	decryptedFile := userlib.SymDec(eKey, blob.Data)
+	return decryptedFile, nil
+
+}
+
+// Checks to see if the user is in one of the permissions, either parent or children.
+// TODO: crap, need to make sure the parent/children is verified signature!
 func (userFile *UserFile) VerifyUserPermissions(username string) bool {
 	visited := make(map[string]bool)
 	return userFile.Search(username, visited)
 }
-
+// Essentially DFS that ends early. Helper function for VerifyUserPermissions.
 func (userFile *UserFile) Search(username string, visited map[string]bool) bool {
 	if _, ok := userFile.Children[username]; ok || userFile.Username == username{
 		return true
