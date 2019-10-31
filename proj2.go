@@ -395,8 +395,8 @@ func (userdata *User) StoreFile(filename string, data []byte) {
 
 	// Update userdata and upload to datastore
 	userdata.SetFileNameToUUID(filename, uuidUserFile)
-	var blob *Blob
-	_ = userdata.UploadUser(blob)
+	var blob Blob
+	_ = userdata.UploadUser(&blob)
 }
 
 // Not encrypted bc thinking what's the point. Hashed tho to hide file name length
