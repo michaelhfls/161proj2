@@ -360,7 +360,7 @@ func GetUser(username string, password string) (userdataptr *User, err error) {
 // Encrypts file with random key, signs it with user's sign key, and
 // puts into Blob structure and upload to datastore
 func UploadFile(data []byte, signKey userlib.DSSignKey) (uuid.UUID, []byte){
-		encKey := userlib.RandomBytes(16)
+	encKey := userlib.RandomBytes(16)
 	encryptedData := userlib.SymEnc(encKey, userlib.RandomBytes(16), data)
 	ds, _ := userlib.DSSign(signKey, encryptedData)
 
