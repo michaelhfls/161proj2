@@ -84,8 +84,8 @@ func bytesToUUID(data []byte) (ret uuid.UUID) {
 type User struct {
 	Username string
 	Files map[string]string // Dictionary with key = encrypted hashed file names, value = encrypted UUID of File-User Node
-	DecKey userlib.PKEDecKey // Key that decrypts user's public key
-	SignKey userlib.DSSignKey // Key that signs, can be verified with user's public key
+	DecKey userlib.PKEDecKey // User's private key (RSA)
+	SignKey userlib.DSSignKey // User's private key (Digital Signatures)
 
 	// Info to re-upload userdata :( we should think of another design tbh
 	UUID uuid.UUID
@@ -269,17 +269,13 @@ func InitUser(username string, password string) (userdataptr *User, err error) {
 	uuidKey, encKey, hmacKey := UserHKDF(username, password)
 	uuidUD := bytesToUUID(uuidKey)
 	ud, err := NewUser(username)
-
 	// Error check
 	if err != nil {
 		return nil, err
 	}
-
 	ud.UUID = uuidUD
 	ud.EncKey = encKey
 	ud.HMACKey = hmacKey
-
-
 	//// Serialize, encrypt, and HMAC the userdata
 	//serialUD, err1 := json.Marshal(ud)
 	//encryptUD := userlib.SymEnc(encKey, userlib.RandomBytes(16), serialUD)
@@ -305,8 +301,7 @@ func InitUser(username string, password string) (userdataptr *User, err error) {
 	if err != nil {
 		return nil, err
 	}
-
-	return nil, err
+	return ud, err
 }
 
 // Uploads the userdata. Use this to also update userdata.
@@ -347,7 +342,6 @@ func GetUser(username string, password string) (userdataptr *User, err error) {
 		err := errors.New("user cannot be found")
 		return nil, err
 	}
-
 	var blob Blob
 	_ = json.Unmarshal(serialBlob, &blob)
 
@@ -457,11 +451,6 @@ func (userdata *User) LoadFile(filename string) (data []byte, err error) {
 		// by decrypting all of it. we do not need to check for approved users in saved
 
 	}
-	for element := range userFile.ChangesMeta {
-		// verify changes by checking that the username has access, then check signature,
-		// then decrypt uuid/key then decrypt file
-	}
-
 	return
 }
 
