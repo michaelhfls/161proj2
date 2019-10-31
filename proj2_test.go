@@ -43,16 +43,14 @@ func TestGetUser(t *testing.T) {
 		return
 	}
 	if a.Username == "Patricia" {
-		t.Error("Patricia!!", err)
+		t.Error("Patricia popped off!!", err)
 	}
 	u, err := GetUser("Patricia", "bussy")
 	if err != nil {
 		t.Error("Failed to reload user", err)
 		return
 	}
-	if a != u {
-		t.Log(a)
-		t.Log(u)
+	if !reflect.DeepEqual(u, a) {
 		t.Error("The user gotten back does not match!", err)
 		return
 	} else {
