@@ -36,6 +36,27 @@ func TestInit(t *testing.T) {
 	// You probably want many more tests here.
 }
 
+func TestGetUser(t *testing.T) {
+	a, err := InitUser("Patricia", "bussy")
+	if err != nil {
+		t.Error("Failed to initialize user", err)
+		return
+	}
+	if a.Username == "Patricia" {
+		t.Error("Patricia popped off!!", err)
+	}
+	u, err := GetUser("Patricia", "bussy")
+	if err != nil {
+		t.Error("Failed to reload user", err)
+		return
+	}
+	if !reflect.DeepEqual(u, a) {
+		t.Error("The user gotten back does not match!", err)
+		return
+	} else {
+		t.Error("they match good work!", err)
+	}
+}
 
 func TestStorage(t *testing.T) {
 	// And some more tests, because
