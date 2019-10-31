@@ -152,8 +152,14 @@ func (blob *Blob) VerifyHMAC(key []byte) (verify bool, err error) {
 // The structure definition for a user file node. Not encrypted.
 type UserFile struct {
 	Username string
+
+	// todo: need to write childrenDS and parentDS in new user file or something idk.
 	Children map[string]uuid.UUID // list of descendents with access to file. username - uuid
+	ChildrenDS []byte // digital signature of children
+
 	Parent uuid.UUID // uuid of parent that gave this user access
+	ParentDS []byte // digital signature of children
+
 	SavedMeta map[int][4][]byte // e(username), e(uuid), e(key), ds
 	SavedMetaDS [2][]byte // first element is username, second element is DS of user
 	ChangesMeta map[int][4][]byte
@@ -489,7 +495,7 @@ func EvaluateMetadata(user *User, meta [4][]byte, index int) ([]byte, error){
 	if !ok {
 		return nil, errors.New("user's verification key does not exist")
 	}
-	
+
 	// Verify metadata first. Only for changeslist.
 	if index != -1 {
 		msg := string(index) + string(meta[1]) + string(meta[2])
@@ -537,33 +543,51 @@ func EvaluateMetadata(user *User, meta [4][]byte, index int) ([]byte, error){
 }
 
 // Checks to see if the user is in one of the permissions, either parent or children.
-// TODO: crap, need to make sure the parent/children is verified signature!
 func (userFile *UserFile) VerifyUserPermissions(username string) bool {
 	visited := make(map[string]bool)
 	return userFile.Search(username, visited)
 }
 // Essentially DFS that ends early. Helper function for VerifyUserPermissions.
 func (userFile *UserFile) Search(username string, visited map[string]bool) bool {
-	if _, ok := userFile.Children[username]; ok || userFile.Username == username{
+	visited[userFile.Username] = true
+
+	if userFile.Username == username{
 		return true
 	}
 
-	visited[userFile.Username] = true
-	uf, err := RetrieveUserFile(userFile.Parent)
-	if err == nil && !visited[uf.Username] {
-		if uf.Search(username, visited) {
-			return true
+	// Verify and visit children
+	verKey, ok := GetPublicVerKey(userFile.Username)
+	if ok {
+		serialChildren, _ := json.Marshal(userFile.Children)
+		err := userlib.DSVerify(verKey, serialChildren, userFile.ChildrenDS)
+		if err == nil {
+			if _, ok := userFile.Children[username]; ok {
+				return true
+			}
+
+			for _, uuidUF := range userFile.Children {
+				uf, err := RetrieveUserFile(uuidUF)
+				if err == nil && !visited[uf.Username] {
+					if uf.Search(username, visited) {
+						return true
+					}
+				}
+			}
 		}
 	}
 
-	for _, uuidUF := range userFile.Children {
-		uf, err = RetrieveUserFile(uuidUF)
-		if err == nil && !visited[uf.Username] {
-			if uf.Search(username, visited) {
+	// Verify and visit parent
+	uf, err := RetrieveUserFile(userFile.Parent)
+	if err == nil && !visited[uf.Username] {
+		verKey, ok := GetPublicVerKey(uf.Username)
+		if ok {
+			err = userlib.DSVerify(verKey, []byte(userFile.Parent.String()), userFile.ParentDS)
+			if err == nil && uf.Search(username, visited) {
 				return true
 			}
 		}
 	}
+
 	return false
 }
 // This creates a sharing record, which is a key pointing to something
