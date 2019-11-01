@@ -4,7 +4,6 @@ package proj2
 // imports it will break the autograder, and we will be Very Upset.
 
 import (
-	"fmt"
 	// You need to add with
 	// go get github.com/cs161-staff/userlib
 	"github.com/cs161-staff/userlib"
@@ -84,7 +83,7 @@ func bytesToUUID(data []byte) (ret uuid.UUID) {
 // The structure definition for a user record. HMAC this every time it is uploaded.
 type User struct {
 	Username string
-	Files map[string]string // Dictionary with key = encrypted hashed file names, value = encrypted UUID of File-User Node
+	Files map[uuid.UUID]uuid.UUID // Dictionary with key = encrypted hashed file names, value = encrypted UUID of File-User Node
 	DecKey userlib.PKEDecKey // User's private key (RSA)
 	SignKey userlib.DSSignKey // User's private key (Digital Signatures)
 
@@ -101,7 +100,7 @@ type User struct {
 func NewUser(username string) (*User, error) {
 	var u User
 	u.Username = username
-	u.Files = make(map[string]string)
+	u.Files = make(map[uuid.UUID]uuid.UUID)
 
 	encKey, decKey, err := userlib.PKEKeyGen()
 	if err == nil {
@@ -183,6 +182,7 @@ func (userdata *User) NewUserFile(parent uuid.UUID, savedMeta map[int][4][]byte,
 
 func RetrieveUserFile(uuidUF uuid.UUID) (*UserFile, error) {
 	serialUserFile, boolean := userlib.DatastoreGet(uuidUF)
+
 	if !boolean {
 		err := errors.New("file cannot be found")
 		return nil, err
@@ -210,11 +210,13 @@ func (userFile *UserFile) UpdateMetadata(recipient string, sender *User, uuidFil
 // Calls UpdateMetadata on this userfile and all of its children and its children...
 func (userFile *UserFile) UpdateAllMetadata(sender *User, uuidFile uuid.UUID, encKey []byte) {
 	userFile.UpdateMetadata(userFile.Username, sender, uuidFile, encKey)
-	if len(userFile.Children) != 0 { // TODO: add another bool later to verify DS when we share access
-		for name, uuidChild := range userFile.Children {
-			userFile, _ = RetrieveUserFile(uuidChild)
-			userFile.UpdateMetadata(name, sender, uuidFile, encKey)
-			userFile.UpdateAllMetadata(sender, uuidFile, encKey)
+	if len(userFile.Children) > 0 { // TODO: add another bool later to verify DS when we share access
+		for _, uuidChild := range userFile.Children {
+			userFile, err := RetrieveUserFile(uuidChild)
+			if err == nil {
+				//userFile.UpdateMetadata(name, sender, uuidFile, encKey)
+				userFile.UpdateAllMetadata(sender, uuidFile, encKey)
+			}
 		}
 	}
 }
@@ -368,7 +370,7 @@ func GetUser(username string, password string) (userdataptr *User, err error) {
 // Encrypts file with random key, signs it with user's sign key, and
 // puts into Blob structure and upload to datastore
 func UploadFile(data []byte, signKey userlib.DSSignKey) (uuid.UUID, []byte){
-		encKey := userlib.RandomBytes(16)
+	encKey := userlib.RandomBytes(16)
 	encryptedData := userlib.SymEnc(encKey, userlib.RandomBytes(16), data)
 	ds, _ := userlib.DSSign(signKey, encryptedData)
 
@@ -404,12 +406,15 @@ func (userdata *User) StoreFile(filename string, data []byte) {
 // Not encrypted bc thinking what's the point. Hashed tho to hide file name length
 func (userdata *User) SetFileNameToUUID(filename string, uuid uuid.UUID) {
 	name, _ := userlib.HMACEval(userdata.HMACKey, []byte(filename))
-	userdata.Files[string(name)] = uuid.String()
+	fakeUUID := bytesToUUID(name)
+	userdata.Files[fakeUUID] = uuid
+
 }
 
-func (userdata *User) GetUUIDFromFileName(filename string) (uuidFile uuid.UUID) {
+func (userdata *User) GetUUIDFromFileName(filename string) (uuid uuid.UUID, ok bool) {
 	name, _ := userlib.HMACEval(userdata.HMACKey, []byte(filename))
-	uuidFile, _ = uuid.Parse(userdata.Files[string(name)])
+	fakeUUID := bytesToUUID(name)
+	uuid, ok = userdata.Files[fakeUUID]
 	return
 }
 
@@ -418,20 +423,25 @@ func (userdata *User) GetUUIDFromFileName(filename string) (uuidFile uuid.UUID) 
 // Append should be efficient, you shouldn't rewrite or reencrypt the
 // existing file, but only whatever additional information and
 // metadata you need.
-
 func (userdata *User) AppendFile(filename string, data []byte) (err error) {
 	uuidNewFile, encKey := UploadFile(data, userdata.SignKey)
-	uuidUserFile := userdata.GetUUIDFromFileName(filename)
+	uuidUserFile, ok := userdata.GetUUIDFromFileName(filename)
+
+	if !ok {
+		return errors.New("file does not exist")
+	}
 
 	// need to retrieve the userfile
 	userFile, err := RetrieveUserFile(uuidUserFile)
 	if err != nil {
 		return err
 	}
+
 	// retrieve owner of file
 	for ; userFile.Parent != uuid.Nil; {
 		userFile, _ = RetrieveUserFile(userFile.Parent)
 	}
+
 	// iterate through children...
 	userFile.UpdateAllMetadata(userdata, uuidNewFile, encKey)
 	return nil
@@ -441,8 +451,13 @@ func (userdata *User) AppendFile(filename string, data []byte) (err error) {
 //
 // It should give an error if the file is corrupted in any way.
 func (userdata *User) LoadFile(filename string) (data []byte, err error) {
-	userFile, err := RetrieveUserFile(userdata.GetUUIDFromFileName(filename))
+	uuidUF, ok := userdata.GetUUIDFromFileName(filename)
 
+	if !ok {
+		return nil, errors.New("file does not exist")
+	}
+
+	userFile, err := RetrieveUserFile(uuidUF)
 	if err != nil {
 		return nil, err
 	}
@@ -476,17 +491,17 @@ func (userdata *User) LoadFile(filename string) (data []byte, err error) {
 	// todo: maybe do a quick verify by passing all the checked users in one go...
 	for i, elem := range userFile.ChangesMeta {
 		fileBlock, err := EvaluateMetadata(userdata, elem, i)
+
 		if err != nil {
 			return nil, err
 		}
 		file = append(file, fileBlock...)
 	}
-	return
+	return file, nil
 }
 
 func EvaluateMetadata(user *User, meta [4][]byte, index int) ([]byte, error){
 	// Decrypt username, elem[0]
-	fmt.Print(user.Username)
 	n, err0 := user.Decrypt(meta[0])
 
 	if err0 != nil {

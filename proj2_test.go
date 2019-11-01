@@ -98,6 +98,8 @@ func TestGetUser(t *testing.T) {
 
 func TestStorage(t *testing.T) {
 	// And some more tests, because
+	userlib.DatastoreClear()
+	userlib.KeystoreClear()
 	a, err := InitUser("alice", "fubar")
 	if err != nil {
 		t.Error("Failed to initialize user", err)
@@ -115,32 +117,122 @@ func TestStorage(t *testing.T) {
 		return
 	}
 
-
 	v := []byte("This is a test")
 	a.StoreFile("file1", v)
 
+	v2, err2 := a.LoadFile("file1")
+	if err2 != nil {
+		t.Error("Failed to upload and download", err2)
+		return
+	}
+
+	if !reflect.DeepEqual(v, v2) {
+		t.Error("Downloaded file is not the same", v, v2)
+		return
+	}
+
+	// More tests
 	c, err := GetUser("alice", "fubar")
 	if err != nil {
 		t.Error("Failed to reload user", err)
 		return
 	}
 
-	if len(c.Files) <= 0 {
-		t.Error("Failed to set file on userdata")
+	if !reflect.DeepEqual(a.Files, c.Files) {
+		t.Error("Did not update userdata", a.Files, c.Files)
 		return
 	}
 
-	encrypt := userlib.PKEEnc()
+	v3, err3 := c.LoadFile("file1")
 
-	//_, err2 := a.LoadFile("file1")
-	//if err2 != nil {
-	//	t.Error("Failed to upload and download", err2)
-	//	return
-	//}
-	//if !reflect.DeepEqual(v, v2) {
-	//	t.Error("Downloaded file is not the same", v, v2)
-	//	return
-	//}
+	if err3 != nil {
+		t.Error("Failed to upload and download", err3)
+		return
+	}
+
+
+	if !reflect.DeepEqual(v, v3) {
+		t.Error("Downloaded file is not the same", v, v2)
+		return
+	}
+
+	_, err4 := c.LoadFile("file2")
+	if err4 == nil {
+		t.Error("Failed to recognize nonexistent file")
+		return
+	}
+
+	f := []byte("This is my second file")
+	c.StoreFile("file2", f)
+
+	d, err5 := GetUser("alice", "fubar")
+	if err5 != nil {
+		t.Error("Failed to reload user", err5)
+		return
+	}
+
+	f1, err6 := d.LoadFile("file2")
+	if err6 != nil {
+		t.Error("Failed to retrieve file", err6)
+		return
+	}
+
+	if !reflect.DeepEqual(f, f1) {
+		t.Error("Failed to retrieve file")
+		return
+	}
+
+	w := []byte("This is my third file")
+
+	d.StoreFile("file2", w)
+	w1, err7 := d.LoadFile("file2")
+	if err7 != nil {
+		t.Error("Failed to load file", err7)
+		return
+	}
+
+	if !reflect.DeepEqual(w, w1) {
+		t.Error("Failed to retrieve file", w, w1)
+		return
+	}
+
+	if reflect.DeepEqual(w, f) {
+		t.Error("Failed to overwrite file")
+		return
+	}
+}
+
+func TestAppend(t *testing.T) {
+	userlib.DatastoreClear()
+	userlib.KeystoreClear()
+	a, err := InitUser("alice", "fubar")
+	if err != nil {
+		t.Error("Failed to initialize user", err)
+		return
+	}
+
+	v := []byte("This is a test. ")
+	a.StoreFile("file1", v)
+
+	// append with current userdata
+	add := []byte("Adding information. ")
+	err1 := a.AppendFile("file1", add)
+	if err1 != nil {
+		t.Error("Failed to append file", err1)
+		return
+	}
+
+	v2, err2 := a.LoadFile("file1")
+	if err2 != nil {
+		t.Error("Failed to load file", err2)
+		return
+	}
+
+	if !reflect.DeepEqual(append(v, add...), v2) {
+		t.Error("Failed to append file", v2)
+	}
+
+	// append with retrieved userdata
 }
 
 //func TestShare(t *testing.T) {
