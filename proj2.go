@@ -452,7 +452,6 @@ func (userdata *User) LoadFile(filename string) (data []byte, err error) {
 		// Evaluate items in SavedMeta. We do NOT need to verify each signature.
 		for _, elem := range userFile.SavedMeta {
 			fileBlock, err := EvaluateMetadata(userdata, elem,-1)
-			fmt.Println(string(fileBlock))
 			if err != nil {
 				return nil, err
 			}
@@ -474,7 +473,6 @@ func (userdata *User) LoadFile(filename string) (data []byte, err error) {
 			return file, errors.New("rest of file corrupted")
 		}
 		fileBlock, err := EvaluateMetadata(userdata, userFile.ChangesMeta[index], index)
-		fmt.Println(string(fileBlock))
 		if err != nil {
 			return nil, err
 		}
