@@ -79,8 +79,6 @@ func bytesToUUID(data []byte) (ret uuid.UUID) {
 	return
 }
 
-// START CODE HERE
-
 // The structure definition for a user record. HMAC this every time it is uploaded.
 type User struct {
 	Username string
@@ -93,8 +91,6 @@ type User struct {
 	EncKey []byte
 	HMACKey []byte
 
-	// Note for JSON to marshal/unmarshal, the fields need to
-	// be public (start with a capital letter)
 }
 
 //init func for user object
@@ -124,9 +120,6 @@ func NewUser(username string) (*User, error) {
 type Blob struct {
 	Data []byte
 	Check []byte
-
-	// Note for JSON to marshal/unmarshal, the fields need to
-	// be public (start with a capital letter)
 }
 
 //init func for blob object
@@ -163,24 +156,19 @@ type UserFile struct {
 
 	SavedMeta map[int][4][]byte // e(username), e(uuid), e(key), ds
 	SavedMetaDS [2][]byte // first element is username, second element is DS of user
-	ChangesMeta map[int][4][]byte
-
-	// Note for JSON to marshal/unmarshal, the fields need to
-	// be public (start with a capital letter)
+	ChangesMeta map[int][4][]byte // ds is: i + eUUID + eKey
 }
-
-func (userdata *User) NewUserFile(parent uuid.UUID, parentDS []byte, savedMeta map[int][4][]byte, savedMetaDS [2][]byte, changesMeta map[int][4][]byte) *UserFile{
+// todo when sharing access: need to write childrenDS and parentDS
+func (userdata *User) NewUserFile(UUID uuid.UUID, parent uuid.UUID, parentDS []byte, savedMeta map[int][4][]byte, savedMetaDS [2][]byte, changesMeta map[int][4][]byte) *UserFile{
 	var f UserFile
 	f.Username = userdata.Username
+	f.UUID = UUID
 	f.Children = make(map[string]uuid.UUID)
 	f.Parent = parent
 	f.ParentDS = parentDS
 	f.SavedMeta = savedMeta
 	f.SavedMetaDS = savedMetaDS
 	f.ChangesMeta = changesMeta
-
-	// todo: need to write childrenDS and parentDS in new user file or something idk. do when sharing access???
-
 	return &f
 }
 
@@ -213,35 +201,25 @@ func (userFile *UserFile) UpdateMetadata(recipient string, sender *User, uuidFil
 	serialUF, _ := json.Marshal(userFile)
 	userlib.DatastoreSet(userFile.UUID, serialUF)
 }
+
 // Calls UpdateMetadata on this userfile and all of its children and its children...
 func (userFile *UserFile) UpdateAllMetadata(sender *User, uuidFile uuid.UUID, encKey []byte) {
 	userFile.UpdateMetadata(userFile.Username, sender, uuidFile, encKey)
-	if len(userFile.Children) > 0 { // TODO: add another bool later to verify DS when we share access
+	if len(userFile.Children) > 0 { // TODO: in share access, add another bool later to verify DS
 		for _, uuidChild := range userFile.Children {
 			userFile, err := RetrieveUserFile(uuidChild)
 			if err == nil {
 				//userFile.UpdateMetadata(name, sender, uuidFile, encKey)
-				userFile.UpdateAllMetadata(sender, uuidFile, encKey)
+				userFile.UpdateAllMetadata(sender, uuidFile, encKey) //todo
 			}
 		}
 	}
-}
-
-// Call this function to retrieve the user's deterministic keys in a
-// stateless manner. We should have one of these for each specific key we need!
-func RetrieveKeys(username string, password string) {
-
 }
 
 // Decrypts ciphertext using the user's private decryption key.
 func (userdata *User) Decrypt(ciphertext []byte) (plaintext []byte, err error) {
 	plaintext, err = userlib.PKEDec(userdata.DecKey, ciphertext)
 	return
-}
-
-// Retrieve the user's private signature key.
-func GetPrivSigKey() {
-
 }
 
 // Retrieve the public encryption key in Keystore under the name username.
@@ -252,11 +230,6 @@ func GetPublicEncKey(username string) (userlib.PKEEncKey, bool) {
 // Retrieve the public signature key in Keystore under the name username.
 func GetPublicVerKey(username string) (userlib.DSVerifyKey, bool) {
 	return userlib.KeystoreGet(username + "sign")
-}
-
-// Retrieve the UUID associated with the userdata.
-func GetUserUUID (username string, password string) {
-
 }
 
 //creates three symmetric keys
@@ -293,22 +266,6 @@ func InitUser(username string, password string) (userdataptr *User, err error) {
 	ud.UUID = uuidUD
 	ud.EncKey = encKey
 	ud.HMACKey = hmacKey
-	//// Serialize, encrypt, and HMAC the userdata
-	//serialUD, err1 := json.Marshal(ud)
-	//encryptUD := userlib.SymEnc(encKey, userlib.RandomBytes(16), serialUD)
-	//hmac, err2 := userlib.HMACEval(hmacKey, encryptUD)
-	//
-	//// Error check
-	//if err1 != nil {
-	//	return nil, err1
-	//} else if err2 != nil {
-	//	return nil, err2
-	//}
-	//
-	//// Serialize blob and upload to Datastore
-	//blob := NewBlob(encryptUD, hmac)
-	//serialBlob, err := json.Marshal(blob)
-	//userlib.DatastoreSet(uuidUD, serialBlob)
 
 	// Upload userdata
 	var blob Blob
@@ -388,7 +345,6 @@ func UploadFile(data []byte, signKey userlib.DSSignKey) (uuid.UUID, []byte){
 }
 
 // This stores a file in the datastore.
-//
 // The name and length of the file should NOT be revealed to the datastore!
 // key length: 16 bytes ..
 func (userdata *User) StoreFile(filename string, data []byte) {
@@ -396,11 +352,11 @@ func (userdata *User) StoreFile(filename string, data []byte) {
 	uuidFile, encKey := UploadFile(data, userdata.SignKey)
 
 	// Create User File and upload to datastore
-	userFile := userdata.NewUserFile(uuid.Nil, nil, make(map[int][4][]byte), [2][]byte{}, make(map[int][4][]byte))
+	uuidUserFile := uuid.New()
+	userFile := userdata.NewUserFile(uuidUserFile, uuid.Nil, nil, make(map[int][4][]byte), [2][]byte{}, make(map[int][4][]byte))
 	userFile.UpdateMetadata(userdata.Username, userdata, uuidFile, encKey)
 
 	serialUserFile, _ := json.Marshal(userFile)
-	uuidUserFile := uuid.New()
 	userlib.DatastoreSet(uuidUserFile, serialUserFile)
 
 	// Update userdata and upload to datastore
@@ -446,14 +402,11 @@ func (userdata *User) AppendFile(filename string, data []byte) (err error) {
 	uuidNewFile, encKey := UploadFile(data, userdata.SignKey)
 
 	// retrieve owner of file
-	for err == nil && userFile.Parent != uuid.Nil {
-		userFile, err = RetrieveUserFile(userFile.Parent)
-	}
 
-	// iterate through children...
-	if err != nil {
-		return errors.New("this is the owner but not the original orignal owner of the file")
-	}
+	userFile = userFile.RetrieveOwner()
+	//for err == nil && userFile.Parent != uuid.Nil {
+	//	userFile, err = RetrieveUserFile(userFile.Parent)
+	//}
 
 	userFile.UpdateAllMetadata(userdata, uuidNewFile, encKey)
 	return nil
@@ -469,12 +422,15 @@ func (userdata *User) LoadFile(filename string) (data []byte, err error) {
 		return nil, errors.New("file does not exist")
 	}
 
-	userFile, err :=  RetrieveUserFile(uuidUF)
+
+	userFile, err := RetrieveUserFile(uuidUF)
+
 	if err != nil {
 		return nil, err
 	}
 
 	var file []byte
+
 	verified := userFile.ValidUsers()
 	if len(userFile.SavedMeta) > 0 {
 		// Verify signer is a permissible user
@@ -522,6 +478,7 @@ func (userdata *User) LoadFile(filename string) (data []byte, err error) {
 		if err != nil {
 			return nil, err
 		}
+
 		file = append(file, fileBlock...)
 	}
 
@@ -588,11 +545,8 @@ func EvaluateMetadata(user *User, meta [4][]byte, index int) ([]byte, error){
 	return decryptedFile, nil
 }
 
-// Checks to see if the user is in one of the permissions, either parent or children.
-func (userFile *UserFile) ValidUsers() map[string]uuid.UUID {
-	verified := make(map[string]uuid.UUID)
-	// Traverse up to the owner of the file and add the owner to our verified list
-
+// Get owner of file
+func (userFile *UserFile) RetrieveOwner() *UserFile {
 	owner := userFile
 	for owner.Parent != uuid.Nil {
 		// Verify that parent is signed first
@@ -608,6 +562,14 @@ func (userFile *UserFile) ValidUsers() map[string]uuid.UUID {
 			}
 		}
 	}
+	return owner
+}
+// Checks to see if the user is in one of the permissions, either parent or children.
+func (userFile *UserFile) ValidUsers() map[string]uuid.UUID {
+	verified := make(map[string]uuid.UUID)
+
+	// Traverse up to the owner of the file
+	owner := userFile.RetrieveOwner()
 
 	_ = Traverse(&verified, owner)
 	return verified
