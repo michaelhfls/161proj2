@@ -29,6 +29,10 @@ func TestInit(t *testing.T) {
 		t.Error("Failed to initialize user", err)
 		return
 	}
+
+	if len(userlib.KeystoreGetMap()) < 2 {
+		t.Error("Failed to store keys on keyserver")
+	}
 	// t.Log() only produces output if you run with "go test -v"
 	t.Log("Got user", u)
 	// If you want to comment the line above,
@@ -114,9 +118,21 @@ func TestStorage(t *testing.T) {
 
 	v := []byte("This is a test")
 	a.StoreFile("file1", v)
-	//
-	//
-	//v2, err2 := u.LoadFile("file1")
+
+	c, err := GetUser("alice", "fubar")
+	if err != nil {
+		t.Error("Failed to reload user", err)
+		return
+	}
+
+	if len(c.Files) <= 0 {
+		t.Error("Failed to set file on userdata")
+		return
+	}
+
+	encrypt := userlib.PKEEnc()
+
+	//_, err2 := a.LoadFile("file1")
 	//if err2 != nil {
 	//	t.Error("Failed to upload and download", err2)
 	//	return

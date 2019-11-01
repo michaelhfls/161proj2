@@ -4,7 +4,8 @@ package proj2
 // imports it will break the autograder, and we will be Very Upset.
 
 import (
-	// You neet to add with
+	"fmt"
+	// You need to add with
 	// go get github.com/cs161-staff/userlib
 	"github.com/cs161-staff/userlib"
 
@@ -176,6 +177,7 @@ func (userdata *User) NewUserFile(parent uuid.UUID, savedMeta map[int][4][]byte,
 	f.SavedMeta = savedMeta
 	f.SavedMetaDS = savedMetaDS
 	f.ChangesMeta = changesMeta
+
 	return &f
 }
 
@@ -225,7 +227,7 @@ func RetrieveKeys(username string, password string) {
 
 // Decrypts ciphertext using the user's private decryption key.
 func (userdata *User) Decrypt(ciphertext []byte) (plaintext []byte, err error) {
-	plaintext, err = userlib.PKEDec(userdata.DecKey, plaintext)
+	plaintext, err = userlib.PKEDec(userdata.DecKey, ciphertext)
 	return
 }
 
@@ -440,13 +442,15 @@ func (userdata *User) AppendFile(filename string, data []byte) (err error) {
 // It should give an error if the file is corrupted in any way.
 func (userdata *User) LoadFile(filename string) (data []byte, err error) {
 	userFile, err := RetrieveUserFile(userdata.GetUUIDFromFileName(filename))
+
 	if err != nil {
 		return nil, err
 	}
 
 	var file []byte
-	if userFile.SavedMeta != nil {
-		//verify person who updated savedmetads last.
+
+	if len(userFile.SavedMeta) > 0 {
+
 		if !userFile.VerifyUserPermissions(string(userFile.SavedMetaDS[0])) {
 			return nil, errors.New("file was corrupted")
 		}
@@ -486,9 +490,16 @@ func (userdata *User) LoadFile(filename string) (data []byte, err error) {
 
 func EvaluateMetadata(user *User, meta [4][]byte, index int) ([]byte, error){
 	// Decrypt username, elem[0]
+	fmt.Print(user.Username)
 	n, err0 := user.Decrypt(meta[0])
+
+	if err0 != nil {
+		return nil, err0
+	}
+
 	name := string(n)
 	verKey, ok := GetPublicVerKey(name)
+
 	if !ok {
 		return nil, errors.New("user's verification key does not exist")
 	}
@@ -506,9 +517,7 @@ func EvaluateMetadata(user *User, meta [4][]byte, index int) ([]byte, error){
 	uuidByte, err1 := user.Decrypt(meta[1])
 	uuidBlob, err2 := uuid.ParseBytes(uuidByte)
 
-	if err0 != nil {
-		return nil, err0
-	} else if err1 != nil {
+	if err1 != nil {
 		return nil, err1
 	} else if err2 != nil {
 		return nil, err2
@@ -548,8 +557,7 @@ func (userFile *UserFile) VerifyUserPermissions(username string) bool {
 // Essentially DFS that ends early. Helper function for VerifyUserPermissions.
 func (userFile *UserFile) Search(username string, visited map[string]bool) bool {
 	visited[userFile.Username] = true
-
-	if userFile.Username == username{
+	if userFile.Username == username {
 		return true
 	}
 
