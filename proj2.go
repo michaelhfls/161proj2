@@ -469,12 +469,11 @@ func (userdata *User) LoadFile(filename string) (data []byte, err error) {
 	}
 
 	var file []byte
-
+	verified := userFile.VerifyUserPermissions()
 	if len(userFile.SavedMeta) > 0 {
-		verified := userFile.VerifyUserPermissions()
 
 		if _, ok := verified[string(userFile.SavedMetaDS[0])]; !ok {
-			return nil, errors.New("file was corrupted")
+			return nil, errors.New("saved was corrupted!")
 		}
 
 		msg, _ := json.Marshal(userFile.SavedMeta)
@@ -493,6 +492,7 @@ func (userdata *User) LoadFile(filename string) (data []byte, err error) {
 				return nil, err
 			}
 			file = append(file, fileBlock...)
+
 		}
 	}
 
@@ -501,13 +501,21 @@ func (userdata *User) LoadFile(filename string) (data []byte, err error) {
 	// verify if everyone in changesmeta is valid and verify if the digital signatures are all good
 	// todo: maybe do a quick verify by passing all the checked users in one go...
 	// todo: don't forget to check index!!!! set counter maybe?
-	for i, elem := range userFile.ChangesMeta {
-		fileBlock, err := EvaluateMetadata(userdata, elem, i)
+	index := 0
+	for i := 0; i < len(userFile.ChangesMeta); i++ {
+		username, err := userlib.PKEDec(userdata.DecKey, userFile.ChangesMeta[index][0])
 
 		if err != nil {
-			return nil, err
+			return nil, errors.New("RSA decryption failed")
 		}
-		file = append(file, fileBlock...)
+		if _, valid := verified[string(username)]; valid {
+			fileBlock, err := EvaluateMetadata(userdata, userFile.ChangesMeta[index], index)
+			if err != nil {
+				return nil, err
+			}
+			file = append(file, fileBlock...)
+		}
+		index++
 	}
 
 	return file, nil
