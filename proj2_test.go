@@ -116,6 +116,12 @@ func TestStorage(t *testing.T) {
 		return
 	}
 
+	_, error := a.LoadFile("gobears")
+	if error == nil {
+		t.Error("this file doesnt exist and we still loaded it!")
+		return
+	}
+
 	v := []byte("This is a test")
 	a.StoreFile("file1", v)
 
@@ -278,25 +284,44 @@ func TestRevokeFile(t *testing.T) {
 	//Sharing and receiving magicword
 	v := []byte("This is a test. ")
 	a.StoreFile("file1", v)
+	_, error := a.ShareFile("flies1", "patricia")
+	if error != nil {
+		t.Error("share file that doesnt exist")
+		return
+	}
 	magicstring, error := a.ShareFile("file1", "patricia")
 	if error != nil {
 		t.Error("Sharing the magic word flopped")
+		return
 	}
 	error = b.ReceiveFile("file1", "alice", magicstring)
 	if error != nil {
 		t.Error("something flopped with receiving the magic word")
+		return
 	}
 	error = c.ReceiveFile("file1", "alice", magicstring)
 	if error != nil {
 		t.Error("something flopped with receiving the magic word")
+		return
 	}
-	magicstring, error = b.ShareFile("file1", "ryshandala")
+	magicstring2, error := b.ShareFile("file1", "ryshandala")
 	if error != nil {
 		t.Error("Sharing the magic word flopped")
+		return
 	}
-	error = d.ReceiveFile("file1", "patricia", magicstring)
+	error = d.ReceiveFile("file1", "patricia", magicstring2)
 	if error != nil {
 		t.Error("something flopped with receiving the magic word")
+		return
+	}
+
+	x := []byte("Eurekaaa!!!")
+	b.StoreFile("file1", x)
+	stuff, error := b.LoadFile("file1")
+	if error == nil {
+		t.Log(string(stuff))
+		t.Error("should error out but didnt")
+		return
 	}
 
 
@@ -304,61 +329,225 @@ func TestRevokeFile(t *testing.T) {
 	afile, error := a.LoadFile("file1")
 	if error != nil {
 		t.Error("Alice flopped loading the file after sharing with patricia")
+		return
 	}
 	bfile, error := b.LoadFile("file1")
 	if error != nil {
 		t.Error("Patricia could not load the file that was shared with her")
+		return
 	}
-	cfile, error := a.LoadFile("file1")
+	cfile, error := c.LoadFile("file1")
 	if error != nil {
 		t.Error("Gertrude flopped loading the file after sharing with patricia")
+		return
 	}
-	dfile, error := b.LoadFile("file1")
+	dfile, error := d.LoadFile("file1")
 	if error != nil {
 		t.Error("Ryshandala could not load the file that was shared with her")
+		return
 	}
 	if !reflect.DeepEqual(afile, bfile) {
 		t.Error("patricia and alice are not loading the same files")
+		return
 	}
 	if !reflect.DeepEqual(afile, cfile) {
 		t.Error("alice and gertrude are not loading the same files")
+		return
 	}
 	if !reflect.DeepEqual(afile, dfile) {
 		t.Error("alice and ryshandala are not loading the same files")
+		return
 	}
 
 
 	error = a.AppendFile("file1", []byte("Patricia is a poopy head!"))
 	if error != nil {
 		t.Error("Alice couldn't append to her own file after sharing it!")
+		return
 	}
 	afile, error = a.LoadFile("file1")
 	if error != nil {
 		t.Error("Alice flopped loading the file after sharing with patricia and appending")
+		return
 	}
 	bfile, error = b.LoadFile("file1")
 	if error != nil {
 		t.Error("Patricia could not load the file that was shared with her after alice appended")
+		return
+	}
+	cfile, error = c.LoadFile("file1")
+	if error != nil {
+		t.Error("Gertrude could not load the file that was shared with her after alice appended")
+		return
+	}
+	dfile, error = d.LoadFile("file1")
+	if error != nil {
+		t.Error("Ryshandala could not load the file that was shared with her after alice appended")
+		return
 	}
 	if !reflect.DeepEqual(afile, bfile) {
 		t.Error("patricia and alice are not loading the same files")
+		return
+	}
+	if !reflect.DeepEqual(afile, cfile) {
+		t.Error("patricia and gertrude are not loading the same files")
+		return
+	}
+	if !reflect.DeepEqual(afile, dfile) {
+		t.Error("patricia and ryshandala are not loading the same files")
+		return
 	}
 
-	error = b.AppendFile("file1", []byte("Alice is a poopyhead!"))
+
+	error = d.AppendFile("file1", []byte("That was rude of you Alice!"))
 	if error != nil {
-		t.Error("Patricia couldn't append to the file that was shared with her!")
+		t.Error("Ryshandala couldn't append to the shared file")
+		return
 	}
 	afile, error = a.LoadFile("file1")
 	if error != nil {
-		t.Error("Alice flopped loading the file after Patricia appended")
+		t.Error("Alice flopped loading the file")
+		return
 	}
 	bfile, error = b.LoadFile("file1")
 	if error != nil {
-		t.Error("Patricia could not load the file that was shared with her after she appended")
+		t.Error("Patricia could not load the file")
+		return
 	}
-	if !reflect.DeepEqual(afile, bfile) {
-		t.Error("patricia and alice are not loading the same files")
+	cfile, error = c.LoadFile("file1")
+	if error != nil {
+		t.Error("Gertrude could not load the file")
+		return
 	}
+	dfile, error = d.LoadFile("file1")
+	if error != nil {
+		t.Error("Ryshandala could not load the file")
+		return
+	}
+	if !reflect.DeepEqual(dfile, afile) {
+		t.Error("ryshandala and alice are not loading the same files")
+		return
+	}
+	if !reflect.DeepEqual(dfile, bfile) {
+		t.Error("ryshandala and patricia are not loading the same files")
+		return
+	}
+	if !reflect.DeepEqual(dfile, cfile) {
+		t.Error("ryshandala and gertrude are not loading the same files")
+		return
+	}
+
+
+	//revoking files
+	error = a.RevokeFile("file1", "patricia")
+	if error != nil {
+		t.Error("Alice couldnt revoke patricia!")
+		return
+	}
+
+	error = a.AppendFile("file1", []byte("patricia was toxic"))
+	if error != nil {
+		t.Error("Alice couldnt append after revoking patricia")
+		return
+	}
+
+	afile, error = a.LoadFile("file1")
+	if error != nil {
+		t.Error("Alice flopped")
+		return
+	}
+	bfile, error = b.LoadFile("file1")
+	if error != nil {
+		t.Error("Patricia no")
+		return
+	}
+	cfile, error = c.LoadFile("file1")
+	if error != nil {
+		t.Error("Gertrude flopped")
+		return
+	}
+	dfile, error = d.LoadFile("file1")
+	if error != nil {
+		t.Error("Ryshandala could not")
+		return
+	}
+	if reflect.DeepEqual(afile, bfile) {
+		t.Error("Alice revoked access but Patricia was still updated")
+		return
+	}
+	if !reflect.DeepEqual(afile, cfile) {
+		t.Error("Alice should still be shared with Gertrude!")
+		return
+	}
+	error = d.AppendFile("file1", []byte("im sad"))
+	if error != nil {
+		t.Error("whatever doesnt matter")
+		return
+	}
+	afile, error = a.LoadFile("file1")
+	if error != nil {
+		t.Error("Oh no alice")
+		return
+	}
+	dfile,error = d.LoadFile("file1")
+	if error != nil {
+		t.Error("o no ryshandala")
+		return
+	}
+	if reflect.DeepEqual(afile, dfile) {
+		t.Error("Alice and ryshandala shouldnt be connected")
+		return
+	}
+	error = c.AppendFile("file1", []byte("morestuff"))
+	if error != nil {
+		t.Error("patricia couldnt append anymore")
+	}
+	afile, error = a.LoadFile("file1")
+	if error != nil {
+		t.Error("Alice flopped")
+		return
+	}
+	cfile, error = c.LoadFile("file1")
+	if error != nil {
+		t.Error("Patricia no")
+		return
+	}
+	if !reflect.DeepEqual(afile, cfile) {
+		t.Error("should be same")
+		return
+	}
+
+
+
+
+	//Get access again??
+
+	error = b.ReceiveFile("file1", "Alice", magicstring)
+	if error != nil {
+		t.Error("Patricia shouldnt be able to reuse magic string to regain access")
+		return
+	}
+	error = b.AppendFile("file1", []byte("screw u alice!"))
+	if error != nil {
+		t.Error("append failed")
+		return
+	}
+	afile, error = a.LoadFile("file1")
+	if error != nil {
+		t.Error("s")
+		return
+	}
+	bfile, error = b.LoadFile("file1")
+	if error != nil {
+		t.Error("s")
+		return
+	}
+	if reflect.DeepEqual(afile, bfile) {
+		t.Error("patricia managed to regain access")
+		return
+	}
+
+
 
 
 
