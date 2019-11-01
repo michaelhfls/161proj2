@@ -446,6 +446,7 @@ func (userdata *User) LoadFile(filename string) (data []byte, err error) {
 
 	var file []byte
 	if userFile.SavedMeta != nil {
+		//verify person who updated savedmetads last.
 		if !userFile.VerifyUserPermissions(string(userFile.SavedMetaDS[0])) {
 			return nil, errors.New("file was corrupted")
 		}
@@ -456,7 +457,7 @@ func (userdata *User) LoadFile(filename string) (data []byte, err error) {
 
 		// Error check
 		if err != nil {
-			return nil, err
+			return nil, errors.New("The saved metadata is not valid")
 		}
 
 		// Evaluate items in SavedMeta. We do NOT need to verify each signature.
@@ -469,7 +470,9 @@ func (userdata *User) LoadFile(filename string) (data []byte, err error) {
 		}
 	}
 
-	// Evaluate items in ChangesMeta. We NEED to verify each signature.
+	// Evaluate items in ChangesMeta.
+	// We NEED to verify each signature.
+	//verify if everyone in changesmeta is valid and verify if the digital signatures are all good
 	// todo: maybe do a quick verify by passing all the checked users in one go...
 	for i, elem := range userFile.ChangesMeta {
 		fileBlock, err := EvaluateMetadata(userdata, elem, i)
