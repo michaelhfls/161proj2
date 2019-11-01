@@ -217,6 +217,24 @@ func TestShare(t *testing.T) {
 	}
 }
 
+func TestShareFile0(t *testing.T) {
+	userlib.DatastoreClear()
+	a, _ := InitUser("alice", "fubar")
+	b, _ := InitUser("patricia", "bussy")
+
+	//Sharing and receiving magicword
+	a.StoreFile("file1", []byte("This is a test. "))
+	magicstring, _ := a.ShareFile("file1", "patricia")
+	_ = b.ReceiveFile("file1", "alice", magicstring)
+	a.StoreFile("file1", []byte("new file"))
+	a.AppendFile("file1", []byte("Patricia is a poopy head!"))
+	afile,_ := a.LoadFile("file1")
+	bfile,_ := b.LoadFile("file1")
+	if reflect.DeepEqual(afile, bfile) {
+		t.Error("They should not share same file i think")
+		return
+	}
+}
 
 func TestShareFile(t *testing.T) {
 	userlib.DatastoreClear()
@@ -355,6 +373,27 @@ func TestRevokeFile1(t *testing.T) {
 		t.Error("should be same")
 		return
 	}
+
+}
+
+func TestRevokeFile8(t *testing.T) {
+	userlib.DatastoreClear()
+	userlib.KeystoreClear()
+	a, _ := InitUser("alice", "fubar")
+	InitUser("patricia", "bussy")
+
+	//Sharing and receiving magicword
+	v := []byte("This is a test. ")
+	a.StoreFile("file1", v)
+
+	a.ShareFile("file1", "patricia")
+	error := a.RevokeFile("file1", "patricia")
+	if error == nil {
+		t.Error("cannot revoke user!")
+	}
+
+
+
 
 }
 
@@ -567,12 +606,20 @@ func TestHack4(t *testing.T) {
 		return
 	}
 
-
-
-
-
-
 }
+func TestHack1(t *testing.T) {
+	userlib.DatastoreClear()
+	InitUser("alice", "fubar")
+	for k, _ := range userlib.DatastoreGetMap() {
+		userlib.DatastoreSet(k, []byte("corrupt random file"))
+	}
+	_, error := GetUser("alice","fubar")
+	if error == nil {
+		t.Error("can't get mutated user!")
+		return
+	}
+}
+
 
 func TestHack5(t *testing.T) {
 	userlib.DatastoreClear()
