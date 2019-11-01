@@ -79,6 +79,7 @@ func TestGetUser(t *testing.T) {
 	}
 
 	userlib.DatastoreClear()
+	userlib.KeystoreClear()
 
 	_, err = GetUser("Patty", "bussy")
 	if err == nil {
@@ -91,8 +92,8 @@ func TestGetUser(t *testing.T) {
 func TestStorage(t *testing.T) {
 	// And some more tests, because
 	userlib.DatastoreClear()
+	userlib.KeystoreClear()
 	a, _ := InitUser("alice", "fubar")
-
 
 	file, error := a.LoadFile("gobears")
 	if error == nil {
@@ -217,6 +218,8 @@ func TestAppend(t *testing.T) {
 
 func TestHack3(t *testing.T) {
 	userlib.DatastoreClear()
+	userlib.KeystoreClear()
+
 	a, _ := InitUser("alice", "fubar")
 
 	v := []byte("This is a test. ")
@@ -236,6 +239,8 @@ func TestHack3(t *testing.T) {
 
 func TestShare(t *testing.T) {
 	userlib.DatastoreClear()
+	userlib.KeystoreClear()
+
 	u, _ := InitUser("alice", "fubar")
 	u2, _ := InitUser("bob", "foobar")
 
@@ -271,6 +276,8 @@ func TestShare(t *testing.T) {
 
 func TestShareFile0(t *testing.T) {
 	userlib.DatastoreClear()
+	userlib.KeystoreClear()
+
 	a, _ := InitUser("alice", "fubar")
 	b, _ := InitUser("patricia", "bussy")
 
@@ -290,6 +297,8 @@ func TestShareFile0(t *testing.T) {
 
 func TestShareFile(t *testing.T) {
 	userlib.DatastoreClear()
+	userlib.KeystoreClear()
+
 	a, _ := InitUser("alice", "fubar")
 	b, _ := InitUser("patricia", "bussy")
 
@@ -313,6 +322,8 @@ func TestShareFile(t *testing.T) {
 
 func TestRecieve(t *testing.T) {
 	userlib.DatastoreClear()
+	userlib.KeystoreClear()
+
 	a, _ := InitUser("alice", "fubar")
 	b, _ := InitUser("patricia", "bussy")
 	a.StoreFile("oop", []byte("sksksk"))
@@ -329,6 +340,8 @@ func TestRecieve(t *testing.T) {
 
 func TestShareFile3(t *testing.T) {
 	userlib.DatastoreClear()
+	userlib.KeystoreClear()
+
 	a, _ := InitUser("alice", "fubar")
 	b, _ := InitUser("patricia", "bussy")
 	c, _ := InitUser("gertrude", "clampot")
@@ -362,6 +375,8 @@ func TestShareFile3(t *testing.T) {
 
 func TestRevokeFile0(t *testing.T) {
 	userlib.DatastoreClear()
+	userlib.KeystoreClear()
+
 	a, _ := InitUser("alice", "fubar")
 	b, _ := InitUser("patricia", "bussy")
 	c, _ := InitUser("gertrude", "clampot")
@@ -661,6 +676,8 @@ func TestHack4(t *testing.T) {
 }
 func TestHack1(t *testing.T) {
 	userlib.DatastoreClear()
+	userlib.KeystoreClear()
+
 	InitUser("alice", "fubar")
 	for k, _ := range userlib.DatastoreGetMap() {
 		userlib.DatastoreSet(k, []byte("corrupt random file"))

@@ -169,7 +169,6 @@ func (userdata *User) NewUserFile(username string, UUID uuid.UUID, parent uuid.U
 	f.Parent = parent
 	if parent != uuid.Nil {
 		msg, _ := json.Marshal(f.Parent)
-
 		parentDS, _ := userlib.DSSign(userdata.SignKey, msg)
 		f.ParentDS = parentDS
 	}
@@ -210,7 +209,7 @@ func (userFile *UserFile) TransferChangesToSavedMeta(meta [4][]byte) {
 
 // Updates the metadata of a recipient's changes map, with a file update by sender
 func (userFile *UserFile) UpdateMetadata(sender *User, uuidFile uuid.UUID, encKey []byte) {
-	pubKey, _ := GetPublicEncKey(userFile.Username)
+	pubKey, _ := GetPublicEncKey(sender.Username)
 
 	eUsername, _ := userlib.PKEEnc(pubKey, []byte(sender.Username))
 	eUUID, _ := userlib.PKEEnc(pubKey, []byte(uuidFile.String()))
@@ -331,6 +330,7 @@ func InitUser(username string, password string) (userdataptr *User, err error) {
 	if err != nil {
 		return nil, err
 	}
+
 	ud.UUID = uuidUD
 	ud.EncKey = encKey
 	ud.HMACKey = hmacKey
@@ -608,12 +608,6 @@ func (userFile *UserFile) ValidUsers() map[string]uuid.UUID {
 
 	// Traverse up to the owner of the file
 	owner := userFile.RetrieveOwner()
-
-	// could be recurisve problem in traverse
-	//fmt.Print(userFile.Username)
-	//if userFile.Username == "bob" {
-	//	fmt.Print("STARTING")
-	//}
 	_ = Traverse(&verified, owner)
 	return verified
 }
