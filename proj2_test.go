@@ -4,16 +4,15 @@ package proj2
 // imports it will break the autograder, and we will be Very Upset.
 
 import (
-	"github.com/cs161-staff/userlib"
-	"reflect"
-	"testing"
-	_ "strconv"
-	_ "errors"
-	_ "strings"
-	_ "github.com/google/uuid"
 	_ "encoding/hex"
 	_ "encoding/json"
-
+	_ "errors"
+	"github.com/cs161-staff/userlib"
+	_ "github.com/google/uuid"
+	"reflect"
+	_ "strconv"
+	_ "strings"
+	"testing"
 )
 
 func TestInit(t *testing.T) {
@@ -22,7 +21,6 @@ func TestInit(t *testing.T) {
 	// You may want to turn it off someday
 	userlib.SetDebugStatus(true)
 	// someUsefulThings()  //  Don't call someUsefulThings() in the autograder in case a student removes it
-	userlib.SetDebugStatus(false)
 	u, err := InitUser("alice", "fubar")
 	if err != nil {
 		// t.Error says the test fails
@@ -171,6 +169,7 @@ func TestHack3(t *testing.T) {
 		saved := actual
 		userlib.DatastoreSet(k, []byte("corrupt random file"))
 		error := a.AppendFile("file1", []byte("something random"))
+
 		if error != nil {
 			t.Error("corrupted again")
 		}
