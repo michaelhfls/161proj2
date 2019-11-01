@@ -126,8 +126,8 @@ func TestHack2(t *testing.T) {
 		saved := actual
 		userlib.DatastoreSet(k, []byte("corrupt random file"))
 		_, error := a.LoadFile("file")
-		if error != nil {
-			t.Error("something got corrupted")
+		if error == nil {
+			t.Error("was supposed to be corrupted")
 		}
 		userlib.DatastoreSet(k, saved)
 	}
@@ -172,9 +172,10 @@ func TestHack3(t *testing.T) {
 		saved := actual
 		userlib.DatastoreSet(k, []byte("corrupt random file"))
 		error := a.AppendFile("file1", []byte("something random"))
-
 		if error != nil {
 			t.Error("corrupted again")
+		if error == nil {
+			t.Error("should be corrupted")
 		}
 		userlib.DatastoreSet(k, saved)
 	}
