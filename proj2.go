@@ -726,6 +726,7 @@ func (userdata *User) ShareFile(filename string, recipient string) (
 	newUF.SavedMetaDS[1], _ = userlib.DSSign(userdata.SignKey, msg)
 
 	// For all UFs: Append each meta in changes to saved.
+	// todo: should we verify all changes for each UF. lol.
 	for _, UUID := range verified {
 		otherUF, err := RetrieveUserFile(UUID)
 		if err == nil {
@@ -820,21 +821,104 @@ func (userdata *User) ReceiveFile(filename string, sender string,
 // Removes target user's access.
 func (userdata *User) RevokeFile(filename string, target_username string) (err error) {
 	// retrieve userfile
-	//uuidUF, ok := userdata.GetUUIDFromFileName(filename)
-	//if !ok {
-	//	return errors.New("file does not exist")
-	//}
+	uuidUF, ok := userdata.GetUUIDFromFileName(filename)
+	if !ok {
+		return errors.New("file does not exist")
+	}
 
-	// verify saved and changes --> add changes to saved and sign
+	ogUF, err := RetrieveUserFile(uuidUF)
+	if err != nil {
+		return err
+	}
 
+	// Update metadata by saving all changes
+	verified := ogUF.ValidUsers()
 
-	// do this for every user EXCEPT revoked user (unless you have to then it's ok)
-	// reupload every UF
+	// Verify saved
+	for _, UUID := range verified {
+		uf, err := RetrieveUserFile(UUID)
+		if err != nil {
+			return err
+		}
+
+		if uf.Username == target_username {
+			continue
+		}
+
+		// First, verify saved.
+		if len(uf.SavedMeta) > 0 {
+			// Verify user
+			name := string(uf.SavedMetaDS[0])
+			if _, ok := verified[name]; !ok {
+				return errors.New("can't share, saved was corrupted")
+			}
+
+			// Check DS
+			msg, _ := json.Marshal(uf.SavedMeta)
+			key, _ := GetPublicVerKey(name)
+			err := userlib.DSVerify(key, msg, uf.SavedMetaDS[1])
+			if err != nil {
+				return err
+			}
+		}
+
+		// Now verify and add changes.
+		for index := 0; index < len(uf.ChangesMeta); index++ {
+			n, err := userlib.PKEDec(userdata.DecKey, uf.ChangesMeta[index][0])
+			name := string(n)
+			if err != nil {
+				return errors.New("RSA decryption failed")
+			}
+
+			// Verify that the sender is valid
+			if _, ok := verified[name]; !ok {
+				return errors.New("rest of file corrupted")
+			}
+
+			uf.TransferChangesToSavedMeta(uf.ChangesMeta[index])
+		}
+
+		// Sign and re-upload.
+		msg, _ := json.Marshal(uf.SavedMeta)
+		ds, _ := userlib.DSSign(userdata.SignKey, msg)
+		uf.SavedMetaDS[0] = []byte(userdata.Username)
+		uf.SavedMetaDS[1] = ds
+
+		serialUF, _ := json.Marshal(uf)
+		userlib.DatastoreSet(uf.UUID, serialUF)
+	}
+
 	// verify UF.children
+	msg, _ := json.Marshal(ogUF.Children)
+	verKey, _ := GetPublicVerKey(userdata.Username)
+	err = userlib.DSVerify(verKey, msg, ogUF.ChildrenDS)
+	if err != nil {
+		return err
+	}
+
 	// go to uuid of target child
-	// set parent to none
-	// then delete their UF //todo: make sure that errors pop up if child tries to access removed parent
-	// remove child from children. re-sign
-	//reserialize and reupload our UF
+	uuidTarget := ogUF.Children[target_username]
+	ufTarget, err := RetrieveUserFile(uuidTarget)
+	if err != nil {
+		return nil
+	}
+
+	// reset parents
+	ufTarget.Parent = uuid.Nil
+	ufTarget.ParentDS = nil
+
+	// delete uf
+	userlib.DatastoreDelete(uuidTarget)
+
+	// delete child and re-sign
+	delete(ogUF.Children, target_username)
+
+	msg, _ = json.Marshal(ogUF.Children)
+	ds, _ := userlib.DSSign(userdata.SignKey, msg)
+	ogUF.ChildrenDS = ds
+
+	// Re-upload UF
+	serialUF, _ := json.Marshal(ogUF)
+	userlib.DatastoreSet(ogUF.UUID, serialUF)
 	return
 }
