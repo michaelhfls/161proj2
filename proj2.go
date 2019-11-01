@@ -4,6 +4,7 @@ package proj2
 // imports it will break the autograder, and we will be Very Upset.
 
 import (
+	"fmt"
 	// You need to add with
 	// go get github.com/cs161-staff/userlib
 	"github.com/cs161-staff/userlib"
@@ -424,25 +425,31 @@ func (userdata *User) GetUUIDFromFileName(filename string) (uuid uuid.UUID, ok b
 // existing file, but only whatever additional information and
 // metadata you need.
 func (userdata *User) AppendFile(filename string, data []byte) (err error) {
-	uuidNewFile, encKey := UploadFile(data, userdata.SignKey)
+	// need to retrieve the userfile
 	uuidUserFile, ok := userdata.GetUUIDFromFileName(filename)
 
 	if !ok {
 		return errors.New("file does not exist")
 	}
 
-	// need to retrieve the userfile
 	userFile, err := RetrieveUserFile(uuidUserFile)
 	if err != nil {
 		return err
 	}
 
+	// Upload file
+	uuidNewFile, encKey := UploadFile(data, userdata.SignKey)
+
 	// retrieve owner of file
-	for ; userFile.Parent != uuid.Nil; {
-		userFile, _ = RetrieveUserFile(userFile.Parent)
+	for ; err == nil && userFile.Parent != uuid.Nil; {
+		userFile, err = RetrieveUserFile(userFile.Parent)
 	}
 
 	// iterate through children...
+	if err != nil {
+		return err
+	}
+
 	userFile.UpdateAllMetadata(userdata, uuidNewFile, encKey)
 	return nil
 }
@@ -492,8 +499,9 @@ func (userdata *User) LoadFile(filename string) (data []byte, err error) {
 
 	// Evaluate items in ChangesMeta.
 	// We NEED to verify each signature.
-	//verify if everyone in changesmeta is valid and verify if the digital signatures are all good
+	// verify if everyone in changesmeta is valid and verify if the digital signatures are all good
 	// todo: maybe do a quick verify by passing all the checked users in one go...
+	// todo: don't forget to check index!!!! set counter maybe?
 	for i, elem := range userFile.ChangesMeta {
 		fileBlock, err := EvaluateMetadata(userdata, elem, i)
 
@@ -562,8 +570,8 @@ func EvaluateMetadata(user *User, meta [4][]byte, index int) ([]byte, error){
 	}
 
 	decryptedFile := userlib.SymDec(eKey, blob.Data)
-	return decryptedFile, nil
 
+	return decryptedFile, nil
 }
 
 // Checks to see if the user is in one of the permissions, either parent or children.
@@ -581,8 +589,6 @@ func (userFile *UserFile) VerifyUserPermissions() map[string]uuid.UUID {
 	return verified
 
 }
-
-
 
 func Traverse(verified *map[string]uuid.UUID, userFile *UserFile) error {
 	if len(userFile.Children) == 0 {

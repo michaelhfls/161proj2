@@ -213,6 +213,16 @@ func TestAppend(t *testing.T) {
 
 	v := []byte("This is a test. ")
 	a.StoreFile("file1", v)
+	v0, err0 := a.LoadFile(("file1"))
+
+	if err0 != nil {
+		t.Error("Failed to load file", err0)
+
+	}
+
+	if !reflect.DeepEqual(v, v0) {
+		t.Error("Failed to load file", v0)
+	}
 
 	// append with current userdata
 	add := []byte("Adding information. ")
@@ -221,6 +231,8 @@ func TestAppend(t *testing.T) {
 		t.Error("Failed to append file", err1)
 		return
 	}
+
+	t.Log("ok ", len(userlib.DatastoreGetMap()))
 
 	v2, err2 := a.LoadFile("file1")
 	if err2 != nil {
