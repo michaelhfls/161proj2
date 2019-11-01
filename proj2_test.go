@@ -4,15 +4,15 @@ package proj2
 // imports it will break the autograder, and we will be Very Upset.
 
 import (
-	_ "encoding/hex"
-	_ "encoding/json"
-	_ "errors"
-	"github.com/cs161-staff/userlib"
-	_ "github.com/google/uuid"
-	"reflect"
-	_ "strconv"
-	_ "strings"
 	"testing"
+	"reflect"
+	"github.com/cs161-staff/userlib"
+	_ "encoding/json"
+	_ "encoding/hex"
+	_ "github.com/google/uuid"
+	_ "strings"
+	_ "errors"
+	_ "strconv"
 )
 
 func TestInit(t *testing.T) {
@@ -202,17 +202,15 @@ func TestStorage(t *testing.T) {
 }
 
 func TestAppend(t *testing.T) {
-	userlib.DatastoreClear()
-	userlib.KeystoreClear()
-	a, err := InitUser("alice", "fubar")
-	if err != nil {
-		t.Error("Failed to initialize user", err)
+	a, err5 := GetUser("alice", "fubar")
+	if err5 != nil {
+		t.Error("Failed to reload user", err5)
 		return
 	}
 
 	v := []byte("This is a test. ")
-	a.StoreFile("file1", v)
-	v0, err0 := a.LoadFile(("file1"))
+	a.StoreFile("abc", v)
+	v0, err0 := a.LoadFile("abc")
 
 	if err0 != nil {
 		t.Error("Failed to load file", err0)
@@ -225,66 +223,103 @@ func TestAppend(t *testing.T) {
 
 	// append with current userdata
 	add := []byte("Adding information. ")
-	err1 := a.AppendFile("file1", add)
+	err1 := a.AppendFile("abc", add)
 	if err1 != nil {
 		t.Error("Failed to append file", err1)
 		return
 	}
 
-	//v2, err2 := a.LoadFile("file1")
-	//if err2 != nil {
-	//	t.Error("Failed to load file", err2)
-	//	return
-	//}
-	//
-	//if !reflect.DeepEqual(append(v, add...), v2) {
-	//	t.Error("Failed to append file", v2)
-	//}
+	v2, err2 := a.LoadFile("abc")
+	if err2 != nil {
+		t.Error("Failed to load file", err2)
+		return
+	}
 
-	// writes test swith append with retrieved userdata using getuser
+	v = append(v, add...)
+	if !reflect.DeepEqual(v, v2) {
+		t.Error("Failed to append file", v2)
+	}
+
+	// writes test with append with retrieved userdata using getuser
+	b, err3 := GetUser("alice", "fubar")
+	if err3 != nil {
+		t.Error("Failed to reload user", err3)
+		return
+	}
+	add2 := []byte("Now continuing... ")
+	err4 := b.AppendFile("abc", add2)
+	if err4 != nil {
+		t.Error("Failed to append file", err4)
+		return
+	}
+
+	v2, err2 = b.LoadFile("abc")
+	if err2 != nil {
+		t.Error("Failed to load file", err2)
+		return
+	}
+
+	v = append(v, add2...)
+	if !reflect.DeepEqual(v, v2) {
+		t.Error("Failed to append file", v, v2)
+	}
+
+	c, err3 := GetUser("alice", "fubar")
+	if err3 != nil {
+		t.Error("Failed to reload user", err3)
+		return
+	}
+
+	v2, err2 = c.LoadFile("abc")
+	if err2 != nil {
+		t.Error("Failed to load file", err2)
+		return
+	}
+
+	if !reflect.DeepEqual(v, v2) {
+		t.Error("Failed to append file", v, v2)
+	}
 }
 
+func TestShare(t *testing.T) {
+	u, err := GetUser("alice", "fubar")
+	if err != nil {
+		t.Error("Failed to reload user", err)
+		return
+	}
+	u2, err2 := InitUser("bob", "foobar")
+	if err2 != nil {
+		t.Error("Failed to initialize bob", err2)
+		return
+	}
 
+	var v, v2 []byte
+	var magic_string string
 
-//func TestShare(t *testing.T) {
-//	u, err := GetUser("alice", "fubar")
-//	if err != nil {
-//		t.Error("Failed to reload user", err)
-//		return
-//	}
-//	u2, err2 := InitUser("bob", "foobar")
-//	if err2 != nil {
-//		t.Error("Failed to initialize bob", err2)
-//		return
-//	}
-//
-//	var v, v2 []byte
-//	var magic_string string
-//
-//	v, err = u.LoadFile("file1")
-//	if err != nil {
-//		t.Error("Failed to download the file from alice", err)
-//		return
-//	}
-//
-//	magic_string, err = u.ShareFile("file1", "bob")
-//	if err != nil {
-//		t.Error("Failed to share the a file", err)
-//		return
-//	}
-//	err = u2.ReceiveFile("file2", "alice", magic_string)
-//	if err != nil {
-//		t.Error("Failed to receive the share message", err)
-//		return
-//	}
-//
-//	v2, err = u2.LoadFile("file2")
-//	if err != nil {
-//		t.Error("Failed to download the file after sharing", err)
-//		return
-//	}
-//	if !reflect.DeepEqual(v, v2) {
-//		t.Error("Shared file is not the same", v, v2)
-//		return
-//	}
-//}
+	v, err = u.LoadFile("file1")
+	if err != nil {
+		t.Error("Failed to download the file from alice", err)
+		return
+	}
+
+	magic_string, err = u.ShareFile("file1", "bob")
+	if err != nil {
+		t.Error("Failed to share the a file", err)
+		return
+	}
+	err = u2.ReceiveFile("file2", "alice", magic_string)
+	if err != nil {
+		t.Error("Failed to receive the share message", err)
+		return
+	}
+
+	v2, err = u2.LoadFile("file2")
+	if err != nil {
+		t.Error("Failed to download the file after sharing", err)
+		return
+	}
+	if !reflect.DeepEqual(v, v2) {
+		t.Error("Shared file is not the same", v, v2)
+		return
+	}
+}

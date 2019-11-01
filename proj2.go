@@ -4,7 +4,7 @@ package proj2
 // imports it will break the autograder, and we will be Very Upset.
 
 import (
-	// You need to add with
+	// You neet to add with
 	// go get github.com/cs161-staff/userlib
 	"github.com/cs161-staff/userlib"
 
@@ -146,6 +146,7 @@ func (blob *Blob) VerifyHMAC(key []byte) (verify bool, err error) {
 type UserFile struct {
 	Username string
 	UUID uuid.UUID
+	//IDds []byte // ds of []byte (username + string(uuid)) //TODO : INTEGRATE THISSSS
 
 	Children map[string]uuid.UUID // list of descendents with access to file. username - uuid
 	ChildrenDS []byte // digital signature of children
@@ -154,20 +155,25 @@ type UserFile struct {
 	ParentDS []byte // digital signature by the parent. NIL if no parent
 
 	SavedMeta map[int][4][]byte // e(username), e(uuid), e(key), ds
-	SavedMetaDS [2][]byte // first element is username, second element is DS of user
+	SavedMetaDS [2][]byte // first element is username, second element is DS of user. non encrypted
 	ChangesMeta map[int][4][]byte // ds is: i + eUUID + eKey
 }
 // todo when sharing access: need to write childrenDS and parentDS
-func (userdata *User) NewUserFile(UUID uuid.UUID, parent uuid.UUID, parentDS []byte, savedMeta map[int][4][]byte, savedMetaDS [2][]byte, changesMeta map[int][4][]byte) *UserFile{
+func (userdata *User) NewUserFile(username string, UUID uuid.UUID, parent uuid.UUID) *UserFile {
 	var f UserFile
-	f.Username = userdata.Username
+	f.Username = username
 	f.UUID = UUID
+	//f.IDds, _ = userlib.DSSign(userdata.SignKey, []byte(f.Username + f.UUID.String()))
+
 	f.Children = make(map[string]uuid.UUID)
 	f.Parent = parent
-	f.ParentDS = parentDS
-	f.SavedMeta = savedMeta
-	f.SavedMetaDS = savedMetaDS
-	f.ChangesMeta = changesMeta
+	if parent != uuid.Nil {
+		parentDS, _ := userlib.DSSign(userdata.SignKey, []byte(parent.String()))
+		f.ParentDS = parentDS
+	}
+
+	f.SavedMeta = make(map[int][4][]byte)
+	f.ChangesMeta = make(map[int][4][]byte)
 	return &f
 }
 
@@ -185,9 +191,24 @@ func RetrieveUserFile(uuidUF uuid.UUID) (*UserFile, error) {
 	return &userFile, nil
 }
 
+// Adds one meta at a time to saveddata. Does not need DS.
+func (userFile *UserFile) UpdateSavedMetadata(sender string, uuidFile uuid.UUID, encKey []byte) {
+	pubKey, _ := GetPublicEncKey(userFile.Username)
+
+	eUsername, _ := userlib.PKEEnc(pubKey, []byte(sender))
+	eUUID, _ := userlib.PKEEnc(pubKey, []byte(uuidFile.String()))
+	eKey, _ := userlib.PKEEnc(pubKey, encKey)
+
+	userFile.SavedMeta[len(userFile.SavedMeta)] = [4][]byte{eUsername, eUUID, eKey, nil}
+}
+
+func (userFile *UserFile) TransferChangesToSavedMeta(meta [4][]byte) {
+	userFile.SavedMeta[len(userFile.SavedMeta)] = meta
+}
+
 // Updates the metadata of a recipient's changes map, with a file update by sender
-func (userFile *UserFile) UpdateMetadata(recipient string, sender *User, uuidFile uuid.UUID, encKey []byte) {
-	pubKey, _ := GetPublicEncKey(recipient)
+func (userFile *UserFile) UpdateMetadata(sender *User, uuidFile uuid.UUID, encKey []byte) {
+	pubKey, _ := GetPublicEncKey(userFile.Username)
 
 	eUsername, _ := userlib.PKEEnc(pubKey, []byte(sender.Username))
 	eUUID, _ := userlib.PKEEnc(pubKey, []byte(uuidFile.String()))
@@ -196,6 +217,7 @@ func (userFile *UserFile) UpdateMetadata(recipient string, sender *User, uuidFil
 	msg := string(len(userFile.ChangesMeta)) + string(eUUID) + string(eKey)
 	ds, _ := userlib.DSSign(sender.SignKey, []byte(msg))
 
+	// todo: need to change the index shit. bc we change index every time we add to saved. or do we need to update this????
 	userFile.ChangesMeta[len(userFile.ChangesMeta)] = [4][]byte{eUsername, eUUID, eKey, ds}
 
 	serialUF, _ := json.Marshal(userFile)
@@ -204,17 +226,61 @@ func (userFile *UserFile) UpdateMetadata(recipient string, sender *User, uuidFil
 
 // Calls UpdateMetadata on this userfile and all of its children and its children...
 func (userFile *UserFile) UpdateAllMetadata(sender *User, uuidFile uuid.UUID, encKey []byte) {
-	userFile.UpdateMetadata(userFile.Username, sender, uuidFile, encKey)
+	userFile.UpdateMetadata(sender, uuidFile, encKey)
 	if len(userFile.Children) > 0 { // TODO: in share access, add another bool later to verify DS
 		for _, uuidChild := range userFile.Children {
 			userFile, err := RetrieveUserFile(uuidChild)
 			if err == nil {
-				//userFile.UpdateMetadata(name, sender, uuidFile, encKey)
+				//userFile.UpdateMetadata(sender, uuidFile, encKey)
 				userFile.UpdateAllMetadata(sender, uuidFile, encKey) //todo
 			}
 		}
 	}
 }
+
+// Decrypts metadata. Returns all of the elements.
+func (userdata *User) DecryptMeta(i int, meta [4][]byte) (string, uuid.UUID, []byte, error) {
+	n, err := userdata.Decrypt(meta[0])
+
+	if err != nil {
+		return "", uuid.Nil, nil, err
+	}
+
+	name := string(n)
+	verKey, ok := GetPublicVerKey(name)
+	if !ok {
+		err = errors.New("user's verification key does not exist")
+		return "", uuid.Nil, nil, err
+	}
+
+	// Verify metadata first. Only for changeslist.
+	if i != -1 {
+		msg := string(i) + string(meta[1]) + string(meta[2])
+		err := userlib.DSVerify(verKey, []byte(msg), meta[3])
+		if err != nil {
+			return "", uuid.Nil, nil, err
+		}
+	}
+
+	// Decrypt uuid, elem[1]
+	uuidBlobByte, err1 := userdata.Decrypt(meta[1])
+	uuidBlob, err2 := uuid.ParseBytes(uuidBlobByte)
+
+	if err1 != nil {
+		return "", uuid.Nil, nil, err1
+	} else if err2 != nil {
+		return "", uuid.Nil, nil, err2
+	}
+
+	key, err := userdata.Decrypt(meta[2])
+	if err != nil {
+		return "", uuid.Nil, nil, err
+	}
+
+	return name, uuidBlob, key, nil
+
+}
+
 
 // Decrypts ciphertext using the user's private decryption key.
 func (userdata *User) Decrypt(ciphertext []byte) (plaintext []byte, err error) {
@@ -353,8 +419,8 @@ func (userdata *User) StoreFile(filename string, data []byte) {
 
 	// Create User File and upload to datastore
 	uuidUserFile := uuid.New()
-	userFile := userdata.NewUserFile(uuidUserFile, uuid.Nil, nil, make(map[int][4][]byte), [2][]byte{}, make(map[int][4][]byte))
-	userFile.UpdateMetadata(userdata.Username, userdata, uuidFile, encKey)
+	userFile := userdata.NewUserFile(userdata.Username, uuidUserFile, uuid.Nil)
+	userFile.UpdateMetadata(userdata, uuidFile, encKey)
 
 	serialUserFile, _ := json.Marshal(userFile)
 	userlib.DatastoreSet(uuidUserFile, serialUserFile)
@@ -433,7 +499,7 @@ func (userdata *User) LoadFile(filename string) (data []byte, err error) {
 	if len(userFile.SavedMeta) > 0 {
 		// Verify signer is a permissible user
 		name := string(userFile.SavedMetaDS[0])
-		if _, ok := verified[name]; !ok || userdata.Username != name {
+		if _, ok := verified[name]; !ok {
 			return nil, errors.New("saved was corrupted")
 		}
 
@@ -473,7 +539,7 @@ func (userdata *User) LoadFile(filename string) (data []byte, err error) {
 
 		fileBlock, err := EvaluateMetadata(userdata, userFile.ChangesMeta[index], index)
 		if err != nil {
-			return nil, err
+			return file, err
 		}
 
 		file = append(file, fileBlock...)
@@ -483,39 +549,10 @@ func (userdata *User) LoadFile(filename string) (data []byte, err error) {
 }
 
 func EvaluateMetadata(user *User, meta [4][]byte, index int) ([]byte, error){
-	// Decrypt username, elem[0]
-	n, err0 := user.Decrypt(meta[0])
-
-	if err0 != nil {
-		return nil, err0
+	name, uuidBlob, key, err := user.DecryptMeta(index, meta)
+	if err != nil {
+		return nil, err
 	}
-
-	name := string(n)
-	verKey, ok := GetPublicVerKey(name)
-
-	if !ok {
-		return nil, errors.New("user's verification key does not exist")
-	}
-
-	// Verify metadata first. Only for changeslist.
-	if index != -1 {
-		msg := string(index) + string(meta[1]) + string(meta[2])
-		err := userlib.DSVerify(verKey, []byte(msg), meta[3])
-		if err != nil {
-			return nil, err
-		}
-	}
-
-	// Decrypt uuid, elem[1]
-	uuidByte, err1 := user.Decrypt(meta[1])
-	uuidBlob, err2 := uuid.ParseBytes(uuidByte)
-
-	if err1 != nil {
-		return nil, err1
-	} else if err2 != nil {
-		return nil, err2
-	}
-
 	// Retrieve the blob
 	serialBlob, ok := userlib.DatastoreGet(uuidBlob)
 	if !ok {
@@ -526,18 +563,13 @@ func EvaluateMetadata(user *User, meta [4][]byte, index int) ([]byte, error){
 	_ = json.Unmarshal(serialBlob, &blob)
 
 	// Verify the blob's signature
-	err := userlib.DSVerify(verKey, blob.Data, blob.Check)
+	verKey, ok := GetPublicVerKey(name)
+	err = userlib.DSVerify(verKey, blob.Data, blob.Check)
 	if err != nil {
 		return nil, err
 	}
 
-	// Decrypt key, elem[2], and decrypt file
-	eKey, err := user.Decrypt(meta[2])
-	if err != nil {
-		return nil, err
-	}
-
-	decryptedFile := userlib.SymDec(eKey, blob.Data)
+	decryptedFile := userlib.SymDec(key, blob.Data)
 
 	return decryptedFile, nil
 }
@@ -611,9 +643,111 @@ func Traverse(verified *map[string]uuid.UUID, userFile *UserFile) error {
 
 func (userdata *User) ShareFile(filename string, recipient string) (
 	magic_string string, err error) {
+	// Check that the file exists. Return empty string if false.
+	uuidUF, ok := userdata.GetUUIDFromFileName(filename)
+	if !ok {
+		return "", errors.New("file does not exist")
+	}
 
-	return
+	// Retrieve the UserFile
+	uf, err := RetrieveUserFile(uuidUF)
+	if err != nil {
+		return "", errors.New("file does not exist")
+	}
+
+	// Create a new UserFile for the recipient
+	uuidNewUF := uuid.New()
+	newUF := userdata.NewUserFile(recipient, uuidNewUF, uf.UUID)
+
+	// Re-encrypt metadata for recipient
+	verified := uf.ValidUsers()
+
+	// First, verify saved. Add saved to newUF.
+	if len(uf.SavedMeta) > 0 {
+		name := string(uf.SavedMetaDS[0])
+		if _, ok := verified[name]; !ok {
+			return "", errors.New("saved was corrupted")
+		}
+
+		msg, _ := json.Marshal(uf.SavedMeta)
+		key, _ := GetPublicVerKey(name)
+		err := userlib.DSVerify(key, msg, uf.SavedMetaDS[1])
+		if err != nil {
+			return "", err
+		}
+
+		// Add this to the new uf's save
+		for _, meta := range uf.SavedMeta {
+			editor, uuidFile, key, err := userdata.DecryptMeta(-1, meta)
+			if err != nil {
+				return "", nil
+			}
+			newUF.UpdateSavedMetadata(editor, uuidFile, key)
+		}
+	}
+
+	// Then, verify changes. Add changes meta to saved for new UF.
+	for index := 0; index < len(uf.ChangesMeta); index++ {
+		n, err := userlib.PKEDec(userdata.DecKey, uf.ChangesMeta[index][0])
+		name := string(n)
+		if err != nil {
+			return "", errors.New("RSA decryption failed")
+		}
+
+		// Verify that the sender is valid
+		if _, ok := verified[name]; !ok {
+			return "", errors.New("rest of file corrupted")
+		}
+
+		name, uuidFile, key, err := userdata.DecryptMeta(index, uf.ChangesMeta[index])
+		if err != nil {
+			return "", err
+		}
+
+		newUF.UpdateSavedMetadata(name, uuidFile, key)
+	}
+
+	// For all UFs: Append each meta in changes to saved.
+	for _, UUID := range verified {
+		otherUF, err := RetrieveUserFile(UUID)
+		if err == nil {
+			for _, meta := range otherUF.ChangesMeta {
+				otherUF.TransferChangesToSavedMeta(meta)
+			}
+
+			// Sign and re-upload.
+			msg, _ := json.Marshal(otherUF.SavedMeta)
+			ds, _ := userlib.DSSign(userdata.SignKey, msg)
+			otherUF.SavedMetaDS[0] = []byte(userdata.Username)
+			otherUF.SavedMetaDS[1] = ds
+
+			serialUF, _ := json.Marshal(otherUF)
+			userlib.DatastoreSet(otherUF.UUID, serialUF)
+		}
+	}
+
+	// Include the new UF in our children. Sign it.
+	uf.Children[recipient] = newUF.UUID
+	msg, _ := json.Marshal(uf.Children)
+	ds, _ := userlib.DSSign(userdata.SignKey, msg)
+	uf.ChildrenDS = ds
+
+	// Upload the new UF
+	serialUF, _ := json.Marshal(newUF)
+	userlib.DatastoreSet(newUF.UUID, serialUF)
+
+	// Reupload our UF
+	serialUF, _ = json.Marshal(newUF)
+	userlib.DatastoreSet(newUF.UUID, serialUF)
+
+	// Generate the magic string: w/ random uuid and signature. encrypted ofc
+	pubKey, _ := GetPublicEncKey(recipient)
+	eUUID, _ := userlib.PKEEnc(pubKey, []byte(uuidNewUF.String()))
+	msDS, _ := userlib.DSSign(userdata.SignKey, eUUID)
+	magic_string = string(eUUID) + string(msDS)
+	return magic_string, nil
 }
+
 
 // Note recipient's filename can be different from the sender's filename.
 // The recipient should not be able to discover the sender's view on
@@ -621,10 +755,29 @@ func (userdata *User) ShareFile(filename string, recipient string) (
 // it is authentically from the sender.
 func (userdata *User) ReceiveFile(filename string, sender string,
 	magic_string string) error {
+
+		//if filename already exists error out
+	// Verify signer
+	// Decrypt magic string with private key to retrieve UUID
+	// Assign hashed file name to UUID
+	// Access UF to confirm
+	// Reload userdata
+
 	return nil
 }
 
 // Removes target user's access.
 func (userdata *User) RevokeFile(filename string, target_username string) (err error) {
+	// retrieve userfile
+
+	// verify saved and changes --> add changes to saved and sign
+	// do this for every user EXCEPT revoked user (unless you have to then it's ok)
+	// reupload every UF
+	// verify UF.children
+	// go to uuid of target child
+	// set parent to none
+	// then delete their UF //todo: make sure that errors pop up if child tries to access removed parent
+	// remove child from children. re-sign
+	//reserialize and reupload our UF
 	return
 }
