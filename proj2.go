@@ -152,13 +152,13 @@ func (blob *Blob) VerifyHMAC(key []byte) (verify bool, err error) {
 // The structure definition for a user file node. Not encrypted.
 type UserFile struct {
 	Username string
+	UUID uuid.UUID
 
-	// todo: need to write childrenDS and parentDS in new user file or something idk.
 	Children map[string]uuid.UUID // list of descendents with access to file. username - uuid
 	ChildrenDS []byte // digital signature of children
 
-	Parent uuid.UUID // uuid of parent that gave this user access
-	ParentDS []byte // digital signature of children
+	Parent uuid.UUID // uuid of parent that gave this user access. uuid.NIL if no parent
+	ParentDS []byte // digital signature by the parent. NIL if no parent
 
 	SavedMeta map[int][4][]byte // e(username), e(uuid), e(key), ds
 	SavedMetaDS [2][]byte // first element is username, second element is DS of user
@@ -168,14 +168,17 @@ type UserFile struct {
 	// be public (start with a capital letter)
 }
 
-func (userdata *User) NewUserFile(parent uuid.UUID, savedMeta map[int][4][]byte, savedMetaDS [2][]byte, changesMeta map[int][4][]byte) *UserFile{
+func (userdata *User) NewUserFile(parent uuid.UUID, parentDS []byte, savedMeta map[int][4][]byte, savedMetaDS [2][]byte, changesMeta map[int][4][]byte) *UserFile{
 	var f UserFile
 	f.Username = userdata.Username
 	f.Children = make(map[string]uuid.UUID)
 	f.Parent = parent
+	f.ParentDS = parentDS
 	f.SavedMeta = savedMeta
 	f.SavedMetaDS = savedMetaDS
 	f.ChangesMeta = changesMeta
+
+	// todo: need to write childrenDS and parentDS in new user file or something idk. do when sharing access???
 
 	return &f
 }
@@ -206,6 +209,9 @@ func (userFile *UserFile) UpdateMetadata(recipient string, sender *User, uuidFil
 	ds, _ := userlib.DSSign(sender.SignKey, []byte(msg))
 
 	userFile.ChangesMeta[len(userFile.ChangesMeta)] = [4][]byte{eUsername, eUUID, eKey, ds}
+
+	serialUF, _ := json.Marshal(userFile)
+	userlib.DatastoreSet(userFile.UUID, serialUF)
 }
 // Calls UpdateMetadata on this userfile and all of its children and its children...
 func (userFile *UserFile) UpdateAllMetadata(sender *User, uuidFile uuid.UUID, encKey []byte) {
@@ -390,7 +396,7 @@ func (userdata *User) StoreFile(filename string, data []byte) {
 	uuidFile, encKey := UploadFile(data, userdata.SignKey)
 
 	// Create User File and upload to datastore
-	userFile := userdata.NewUserFile(uuid.Nil, make(map[int][4][]byte), [2][]byte{}, make(map[int][4][]byte))
+	userFile := userdata.NewUserFile(uuid.Nil, nil, make(map[int][4][]byte), [2][]byte{}, make(map[int][4][]byte))
 	userFile.UpdateMetadata(userdata.Username, userdata, uuidFile, encKey)
 
 	serialUserFile, _ := json.Marshal(userFile)
@@ -469,13 +475,15 @@ func (userdata *User) LoadFile(filename string) (data []byte, err error) {
 	}
 
 	var file []byte
-	verified := userFile.VerifyUserPermissions()
+	verified := userFile.ValidUsers()
 	if len(userFile.SavedMeta) > 0 {
-
-		if _, ok := verified[string(userFile.SavedMetaDS[0])]; !ok {
-			return nil, errors.New("saved was corrupted!")
+		// Verify signer is a permissible user
+		name := string(userFile.SavedMetaDS[0])
+		if _, ok := verified[name]; !ok || userdata.Username != name {
+			return nil, errors.New("saved was corrupted")
 		}
 
+		// Check digital signature
 		msg, _ := json.Marshal(userFile.SavedMeta)
 		key, _ := GetPublicVerKey(string(userFile.SavedMetaDS[0]))
 		err := userlib.DSVerify(key, msg, userFile.SavedMetaDS[1])
@@ -497,23 +505,23 @@ func (userdata *User) LoadFile(filename string) (data []byte, err error) {
 	}
 
 	// Evaluate items in ChangesMeta.
-	// We NEED to verify each signature.
-	// verify if everyone in changesmeta is valid and verify if the digital signatures are all good
-	// todo: maybe do a quick verify by passing all the checked users in one go...
-	// todo: don't forget to check index!!!! set counter maybe?
 	for index := 0; index < len(userFile.ChangesMeta); index++ {
 		username, err := userlib.PKEDec(userdata.DecKey, userFile.ChangesMeta[index][0])
 
 		if err != nil {
 			return nil, errors.New("RSA decryption failed")
 		}
-		if _, valid := verified[string(username)]; valid {
-			fileBlock, err := EvaluateMetadata(userdata, userFile.ChangesMeta[index], index)
-			if err != nil {
-				return nil, err
-			}
-			file = append(file, fileBlock...)
+
+		// Verify that the sender is valid
+		if _, ok := verified[string(username)]; !ok {
+			return file, errors.New("rest of file corrupted")
 		}
+
+		fileBlock, err := EvaluateMetadata(userdata, userFile.ChangesMeta[index], index)
+		if err != nil {
+			return nil, err
+		}
+		file = append(file, fileBlock...)
 	}
 
 	return file, nil
@@ -580,80 +588,56 @@ func EvaluateMetadata(user *User, meta [4][]byte, index int) ([]byte, error){
 }
 
 // Checks to see if the user is in one of the permissions, either parent or children.
-func (userFile *UserFile) VerifyUserPermissions() map[string]uuid.UUID {
+func (userFile *UserFile) ValidUsers() map[string]uuid.UUID {
 	verified := make(map[string]uuid.UUID)
-	//Traverse up to the owner of the file and add the owner to our verified list
-	uuid := userFile.Parent
-	owner, err := RetrieveUserFile(uuid)
-	//todo: err may not be nil
-	for err == nil {
-		uuid = owner.Parent
-		owner, err = RetrieveUserFile(uuid)
-	}
-	verified[owner.Username] = uuid
-	Traverse(&verified, owner)
-	return verified
+	// Traverse up to the owner of the file and add the owner to our verified list
 
+	owner := userFile
+	for owner.Parent != uuid.Nil {
+		// Verify that parent is signed first
+		verKey, ok := GetPublicVerKey(owner.Username)
+		if ok {
+			err := userlib.DSVerify(verKey, []byte(userFile.Parent.String()), userFile.ParentDS)
+			if err == nil {
+				parent, err := RetrieveUserFile(owner.Parent)
+				if err != nil {
+					break
+				}
+				owner = parent
+			}
+		}
+	}
+
+	_ = Traverse(&verified, owner)
+	return verified
 }
 
 func Traverse(verified *map[string]uuid.UUID, userFile *UserFile) error {
-	if len(userFile.Children) == 0 {
-		return errors.New("ratchet")
+	(*verified)[userFile.Username] = userFile.UUID
+
+	// Verify children
+	verKey, ok := GetPublicVerKey(userFile.Username)
+	if !ok {
+		return errors.New("no public ver key")
 	}
-	for username, uuid := range userFile.Children {
-		(*verified)[username] = uuid
-		ufile, err := RetrieveUserFile(uuid)
+
+	serialChildren, _ := json.Marshal(userFile.Children)
+	err := userlib.DSVerify(verKey, serialChildren, userFile.ChildrenDS)
+	if err != nil {
+		return err
+	}
+
+	// Visit children
+	for _, uuidChild := range userFile.Children {
+		uFile, err := RetrieveUserFile(uuidChild)
 		if err != nil {
-			return errors.New("something really ratchet happened")
+			return errors.New("user does not have permission")
 		}
-		Traverse(verified, ufile)
+		_ = Traverse(verified, uFile)
 	}
 	return nil
 }
 
-// Essentially DFS that ends early. Helper function for VerifyUserPermissions.
-//func (userFile *UserFile) Search(username string, visited map[string]bool) bool {
-//	visited[userFile.Username] = true
-//	//Questionable?? Even if the username that we r searching matches userfile.username doesnt mean that it has permission
-//	if userFile.Username == username {
-//		return true
-//	}
-//
-//	// Verify and visit children
-//	verKey, ok := GetPublicVerKey(userFile.Username)
-//	if ok {
-//		serialChildren, _ := json.Marshal(userFile.Children)
-//		err := userlib.DSVerify(verKey, serialChildren, userFile.ChildrenDS)
-//		if err == nil {
-//			if _, ok := userFile.Children[username]; ok {
-//				return true
-//			}
-//
-//			for _, uuidUF := range userFile.Children {
-//				uf, err := RetrieveUserFile(uuidUF)
-//				if err == nil && !visited[uf.Username] {
-//					if uf.Search(username, visited) {
-//						return true
-//					}
-//				}
-//			}
-//		}
-//	}
-//
-//	// Verify and visit parent
-//	uf, err := RetrieveUserFile(userFile.Parent)
-//	if err == nil && !visited[uf.Username] {
-//		verKey, ok := GetPublicVerKey(uf.Username)
-//		if ok {
-//			err = userlib.DSVerify(verKey, []byte(userFile.Parent.String()), userFile.ParentDS)
-//			if err == nil && uf.Search(username, visited) {
-//				return true
-//			}
-//		}
-//	}
-//
-//	return false
-//}
 // This creates a sharing record, which is a key pointing to something
 // in the datastore to share with the recipient.
 
