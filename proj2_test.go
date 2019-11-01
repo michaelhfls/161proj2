@@ -90,6 +90,7 @@ func TestGetUser(t *testing.T) {
 
 
 
+
 func TestStorage(t *testing.T) {
 	// And some more tests, because
 	userlib.DatastoreClear()
@@ -194,6 +195,7 @@ func TestShare(t *testing.T) {
 	}
 	if magic_string != "" {
 		t.Error("return empty string when sharing nonexistant file")
+		return
 	}
 	u.StoreFile("file1", []byte("please pass"))
 	magic_string, err = u.ShareFile("file1", "bob")
@@ -238,6 +240,22 @@ func TestShareFile(t *testing.T) {
 	}
 }
 
+
+func TestRecieve(t *testing.T) {
+	userlib.DatastoreClear()
+	a, _ := InitUser("alice", "fubar")
+	b, _ := InitUser("patricia", "bussy")
+	a.StoreFile("oop", []byte("sksksk"))
+	b.StoreFile("oop", []byte("ksksks"))
+	magicstring, _ := a.ShareFile("oop", "patricia")
+	error := b.ReceiveFile("oop", "alice", magicstring)
+	if error == nil {
+		t.Error("not allowed to share file with same filename!")
+		return
+	}
+
+
+}
 
 func TestShareFile3(t *testing.T) {
 	userlib.DatastoreClear()
@@ -676,7 +694,7 @@ func TestHack8(t *testing.T) {
 		t.Error("no access")
 		return
 	}
-	
+
 }
 
 
