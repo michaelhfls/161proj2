@@ -585,6 +585,7 @@ func (userFile *UserFile) VerifyUserPermissions() map[string]uuid.UUID {
 	//Traverse up to the owner of the file and add the owner to our verified list
 	uuid := userFile.Parent
 	owner, err := RetrieveUserFile(uuid)
+	//todo: err may not be nil
 	for err == nil {
 		uuid = owner.Parent
 		owner, err = RetrieveUserFile(uuid)
