@@ -4,6 +4,7 @@ package proj2
 // imports it will break the autograder, and we will be Very Upset.
 
 import (
+<<<<<<< HEAD
 	 "github.com/cs161-staff/userlib"
 	 "reflect"
 	 "testing"
@@ -13,6 +14,17 @@ import (
 	 _ "github.com/google/uuid"
 	 _ "encoding/hex"
 	 _ "encoding/json"
+=======
+	"github.com/cs161-staff/userlib"
+	"reflect"
+	"testing"
+	_ "strconv"
+	_ "errors"
+	_ "strings"
+	_ "github.com/google/uuid"
+	_ "encoding/hex"
+	_ "encoding/json"
+>>>>>>> 03ae446df4dc1f63c1d7e8fa5bdace594932bd2d
 
 )
 
@@ -137,6 +149,8 @@ func TestHack2(t *testing.T) {
 	}
 }
 
+
+
 func TestAppend(t *testing.T) {
 	userlib.DatastoreClear()
 	a, _ := InitUser("alice", "fubar")
@@ -155,6 +169,32 @@ func TestAppend(t *testing.T) {
 	err1 := a.AppendFile("file1", add)
 	if err1 != nil {
 		t.Error("Failed to append file", err1)
+z
+	v := []byte("This is a test. ")
+	a.StoreFile("abc", v)
+	v0, err0 := a.LoadFile("abc")
+
+	if err0 != nil {
+		t.Error("Failed to load file", err0)
+
+	}
+
+	if !reflect.DeepEqual(v, v0) {
+		t.Error("Failed to load file", v0)
+	}
+
+	// append with current userdata
+	add := []byte("Adding information. ")
+	err1 := a.AppendFile("abc", add)
+	if err1 != nil {
+		t.Error("Failed to append file", err1)
+		return
+	}
+
+	v2, err2 := a.LoadFile("abc")
+	if err2 != nil {
+		t.Error("Failed to load file", err2)
+>>>>>>> 03ae446df4dc1f63c1d7e8fa5bdace594932bd2d
 		return
 	}
 	v2, _ := a.LoadFile("file1")
@@ -163,6 +203,7 @@ func TestAppend(t *testing.T) {
 	}
 }
 
+<<<<<<< HEAD
 func TestHack3(t *testing.T) {
 	userlib.DatastoreClear()
 	a, _ := InitUser("alice", "fubar")
@@ -214,9 +255,196 @@ func TestShare(t *testing.T) {
 	if !reflect.DeepEqual(v, v2) {
 		t.Error("Shared file is not the same")
 		return
+=======
+	v = append(v, add...)
+	if !reflect.DeepEqual(v, v2) {
+		t.Error("Failed to append file", v2)
+	}
+
+	// writes test with append with retrieved userdata using getuser
+	b, err3 := GetUser("alice", "fubar")
+	if err3 != nil {
+		t.Error("Failed to reload user", err3)
+		return
+	}
+	add2 := []byte("Now continuing... ")
+	err4 := b.AppendFile("abc", add2)
+	if err4 != nil {
+		t.Error("Failed to append file", err4)
+		return
+	}
+
+	v2, err2 = b.LoadFile("abc")
+	if err2 != nil {
+		t.Error("Failed to load file", err2)
+		return
+	}
+
+	v = append(v, add2...)
+	if !reflect.DeepEqual(v, v2) {
+		t.Error("Failed to append file", v, v2)
+>>>>>>> 03ae446df4dc1f63c1d7e8fa5bdace594932bd2d
 	}
 }
 
+<<<<<<< HEAD
+func TestShareFile0(t *testing.T) {
+	userlib.DatastoreClear()
+	a, _ := InitUser("alice", "fubar")
+	b, _ := InitUser("patricia", "bussy")
+
+	//Sharing and receiving magicword
+	a.StoreFile("file1", []byte("This is a test. "))
+	magicstring, _ := a.ShareFile("file1", "patricia")
+	_ = b.ReceiveFile("file1", "alice", magicstring)
+	a.StoreFile("file1", []byte("new file"))
+	a.AppendFile("file1", []byte("Patricia is a poopy head!"))
+	afile,_ := a.LoadFile("file1")
+	bfile,_ := b.LoadFile("file1")
+	if reflect.DeepEqual(afile, bfile) {
+		t.Error("They should not share same file i think")
+=======
+	c, err3 := GetUser("alice", "fubar")
+	if err3 != nil {
+		t.Error("Failed to reload user", err3)
+>>>>>>> 03ae446df4dc1f63c1d7e8fa5bdace594932bd2d
+		return
+	}
+}
+
+<<<<<<< HEAD
+func TestShareFile(t *testing.T) {
+	userlib.DatastoreClear()
+	a, _ := InitUser("alice", "fubar")
+	b, _ := InitUser("patricia", "bussy")
+
+	//Sharing and receiving magicword
+	a.StoreFile("file1", []byte("This is a test. "))
+	magicstring, error := a.ShareFile("file1", "patricia")
+	if error != nil {
+		t.Error("Sharing the magic word flopped")
+=======
+	v2, err2 = c.LoadFile("abc")
+	if err2 != nil {
+		t.Error("Failed to load file", err2)
+>>>>>>> 03ae446df4dc1f63c1d7e8fa5bdace594932bd2d
+		return
+	}
+	error = b.ReceiveFile("file1", "alice", magicstring)
+	a.AppendFile("file1", []byte("Patricia is a poopy head!"))
+	afile,_ := a.LoadFile("file1")
+	bfile,_ := b.LoadFile("file1")
+	if !reflect.DeepEqual(afile, bfile) {
+		t.Error("patricia and alice are not loading the same files")
+		return
+	}
+}
+
+<<<<<<< HEAD
+
+func TestRecieve(t *testing.T) {
+	userlib.DatastoreClear()
+	a, _ := InitUser("alice", "fubar")
+	b, _ := InitUser("patricia", "bussy")
+	a.StoreFile("oop", []byte("sksksk"))
+	b.StoreFile("oop", []byte("ksksks"))
+	magicstring, _ := a.ShareFile("oop", "patricia")
+	error := b.ReceiveFile("oop", "alice", magicstring)
+	if error == nil {
+		t.Error("not allowed to share file with same filename!")
+=======
+	if !reflect.DeepEqual(v, v2) {
+		t.Error("Failed to append file", v, v2)
+	}
+}
+
+func TestHack3(t *testing.T) {
+	userlib.DatastoreClear()
+	a, _ := InitUser("alice", "fubar")
+
+	v := []byte("This is a test. ")
+	a.StoreFile("file1", v)
+
+	for k, actual := range userlib.DatastoreGetMap() {
+		saved := actual
+		userlib.DatastoreSet(k, []byte("corrupt random file"))
+		error := a.AppendFile("file1", []byte("something random"))
+		if error != nil {
+			t.Error("corrupted again")
+		}
+		userlib.DatastoreSet(k, saved)
+	}
+}
+
+
+func TestShare(t *testing.T) {
+	userlib.DatastoreClear()
+	u, _ := InitUser("alice", "fubar")
+	u2, _ := InitUser("bob", "foobar")
+
+
+	magic_string, err := u.ShareFile("file1", "bob")
+	if err != nil {
+		t.Error("File doesn't exist")
+		return
+	}
+	if magic_string != "" {
+		t.Error("return empty string when sharing nonexistant file")
+		return
+	}
+	u.StoreFile("file1", []byte("please pass"))
+	magic_string, err = u.ShareFile("file1", "bob")
+	err = u2.ReceiveFile("file1", "alice", magic_string)
+	if err != nil {
+		t.Error("Failed to receive the share message", err)
+>>>>>>> 03ae446df4dc1f63c1d7e8fa5bdace594932bd2d
+		return
+	}
+
+	v2, err := u2.LoadFile("file1")
+	if err != nil {
+		t.Error("Failed to download the file after sharing", err)
+		return
+	}
+	v, err := u.LoadFile("file1")
+	if !reflect.DeepEqual(v, v2) {
+		t.Error("Shared file is not the same")
+		return
+	}
+}
+
+<<<<<<< HEAD
+}
+
+func TestShareFile3(t *testing.T) {
+	userlib.DatastoreClear()
+	a, _ := InitUser("alice", "fubar")
+	b, _ := InitUser("patricia", "bussy")
+	c, _ := InitUser("gertrude", "clampot")
+
+	//Sharing and receiving magicword
+	v := []byte("This is a test. ")
+	a.StoreFile("file1", v)
+
+	magicstring, _ := a.ShareFile("file1", "patricia")
+	b.ReceiveFile("file1", "alice", magicstring)
+
+	magicstring2, _ := b.ShareFile("file1", "gertrude")
+	c.ReceiveFile("file1", "patricia", magicstring2)
+
+	c.AppendFile("file1", []byte("Thats not nice!"))
+
+	afile,_ := a.LoadFile("file1")
+	bfile,_ := b.LoadFile("file1")
+	cfile,_ := c.LoadFile("file1")
+
+	if !reflect.DeepEqual(cfile, afile) {
+		t.Error("should be same")
+		return
+	}
+	if !reflect.DeepEqual(cfile, bfile) {
+		t.Error("should be same")
+=======
 func TestShareFile0(t *testing.T) {
 	userlib.DatastoreClear()
 	a, _ := InitUser("alice", "fubar")
@@ -254,58 +482,12 @@ func TestShareFile(t *testing.T) {
 	bfile,_ := b.LoadFile("file1")
 	if !reflect.DeepEqual(afile, bfile) {
 		t.Error("patricia and alice are not loading the same files")
+>>>>>>> 03ae446df4dc1f63c1d7e8fa5bdace594932bd2d
 		return
 	}
 }
 
-
-func TestRecieve(t *testing.T) {
-	userlib.DatastoreClear()
-	a, _ := InitUser("alice", "fubar")
-	b, _ := InitUser("patricia", "bussy")
-	a.StoreFile("oop", []byte("sksksk"))
-	b.StoreFile("oop", []byte("ksksks"))
-	magicstring, _ := a.ShareFile("oop", "patricia")
-	error := b.ReceiveFile("oop", "alice", magicstring)
-	if error == nil {
-		t.Error("not allowed to share file with same filename!")
-		return
-	}
-
-
-}
-
-func TestShareFile3(t *testing.T) {
-	userlib.DatastoreClear()
-	a, _ := InitUser("alice", "fubar")
-	b, _ := InitUser("patricia", "bussy")
-	c, _ := InitUser("gertrude", "clampot")
-
-	//Sharing and receiving magicword
-	v := []byte("This is a test. ")
-	a.StoreFile("file1", v)
-
-	magicstring, _ := a.ShareFile("file1", "patricia")
-	b.ReceiveFile("file1", "alice", magicstring)
-
-	magicstring2, _ := b.ShareFile("file1", "gertrude")
-	c.ReceiveFile("file1", "patricia", magicstring2)
-
-	c.AppendFile("file1", []byte("Thats not nice!"))
-
-	afile,_ := a.LoadFile("file1")
-	bfile,_ := b.LoadFile("file1")
-	cfile,_ := c.LoadFile("file1")
-
-	if !reflect.DeepEqual(cfile, afile) {
-		t.Error("should be same")
-		return
-	}
-	if !reflect.DeepEqual(cfile, bfile) {
-		t.Error("should be same")
-		return
-	}
-
+<<<<<<< HEAD
 }
 
 func TestRevokeFile0(t *testing.T) {
@@ -333,6 +515,19 @@ func TestRevokeFile0(t *testing.T) {
 
 	if reflect.DeepEqual(afile, bfile) {
 		t.Error("should not be same")
+=======
+
+func TestRecieve(t *testing.T) {
+	userlib.DatastoreClear()
+	a, _ := InitUser("alice", "fubar")
+	b, _ := InitUser("patricia", "bussy")
+	a.StoreFile("oop", []byte("sksksk"))
+	b.StoreFile("oop", []byte("ksksks"))
+	magicstring, _ := a.ShareFile("oop", "patricia")
+	error := b.ReceiveFile("oop", "alice", magicstring)
+	if error == nil {
+		t.Error("not allowed to share file with same filename!")
+>>>>>>> 03ae446df4dc1f63c1d7e8fa5bdace594932bd2d
 		return
 	}
 	if reflect.DeepEqual(afile, cfile) {
@@ -341,9 +536,17 @@ func TestRevokeFile0(t *testing.T) {
 	}
 }
 
+<<<<<<< HEAD
 func TestRevokeFile1(t *testing.T) {
 	userlib.DatastoreClear()
 	userlib.KeystoreClear()
+=======
+
+}
+
+func TestShareFile3(t *testing.T) {
+	userlib.DatastoreClear()
+>>>>>>> 03ae446df4dc1f63c1d7e8fa5bdace594932bd2d
 	a, _ := InitUser("alice", "fubar")
 	b, _ := InitUser("patricia", "bussy")
 	c, _ := InitUser("gertrude", "clampot")
@@ -358,24 +561,37 @@ func TestRevokeFile1(t *testing.T) {
 	magicstring2, _ := b.ShareFile("file1", "gertrude")
 	c.ReceiveFile("file1", "patricia", magicstring2)
 
+<<<<<<< HEAD
 	a.RevokeFile("file1", "patricia")
 	b.AppendFile("file1", []byte("i removed access"))
+=======
+	c.AppendFile("file1", []byte("Thats not nice!"))
+>>>>>>> 03ae446df4dc1f63c1d7e8fa5bdace594932bd2d
 
 	afile,_ := a.LoadFile("file1")
 	bfile,_ := b.LoadFile("file1")
 	cfile,_ := c.LoadFile("file1")
 
+<<<<<<< HEAD
 	if reflect.DeepEqual(afile, bfile) {
 		t.Error("should not be same")
 		return
 	}
 	if !reflect.DeepEqual(bfile, cfile) {
+=======
+	if !reflect.DeepEqual(cfile, afile) {
+		t.Error("should be same")
+		return
+	}
+	if !reflect.DeepEqual(cfile, bfile) {
+>>>>>>> 03ae446df4dc1f63c1d7e8fa5bdace594932bd2d
 		t.Error("should be same")
 		return
 	}
 
 }
 
+<<<<<<< HEAD
 func TestRevokeFile8(t *testing.T) {
 	userlib.DatastoreClear()
 	userlib.KeystoreClear()
@@ -400,6 +616,10 @@ func TestRevokeFile8(t *testing.T) {
 func TestRevokeFile2(t *testing.T) {
 	userlib.DatastoreClear()
 	userlib.KeystoreClear()
+=======
+func TestRevokeFile0(t *testing.T) {
+	userlib.DatastoreClear()
+>>>>>>> 03ae446df4dc1f63c1d7e8fa5bdace594932bd2d
 	a, _ := InitUser("alice", "fubar")
 	b, _ := InitUser("patricia", "bussy")
 	c, _ := InitUser("gertrude", "clampot")
@@ -414,13 +634,18 @@ func TestRevokeFile2(t *testing.T) {
 	magicstring2, _ := b.ShareFile("file1", "gertrude")
 	c.ReceiveFile("file1", "patricia", magicstring2)
 
+<<<<<<< HEAD
 	b.RevokeFile("file1", "gertrude")
+=======
+	a.RevokeFile("file1", "patricia")
+>>>>>>> 03ae446df4dc1f63c1d7e8fa5bdace594932bd2d
 	a.AppendFile("file1", []byte("i removed access"))
 
 	afile,_ := a.LoadFile("file1")
 	bfile,_ := b.LoadFile("file1")
 	cfile,_ := c.LoadFile("file1")
 
+<<<<<<< HEAD
 	if !reflect.DeepEqual(afile, bfile) {
 		t.Error("should be same")
 		return
@@ -430,10 +655,18 @@ func TestRevokeFile2(t *testing.T) {
 		return
 	}
 	if reflect.DeepEqual(bfile, cfile) {
+=======
+	if reflect.DeepEqual(afile, bfile) {
+		t.Error("should not be same")
+		return
+	}
+	if reflect.DeepEqual(afile, cfile) {
+>>>>>>> 03ae446df4dc1f63c1d7e8fa5bdace594932bd2d
 		t.Error("should not be same")
 		return
 	}
 }
+<<<<<<< HEAD
 
 func TestRevokeFile3(t *testing.T) {
 	userlib.DatastoreClear()
@@ -446,25 +679,53 @@ func TestRevokeFile3(t *testing.T) {
 	v := []byte("This is a test. ")
 	a.StoreFile("file1", v)
 
+=======
+
+func TestRevokeFile1(t *testing.T) {
+	userlib.DatastoreClear()
+	userlib.KeystoreClear()
+	a, _ := InitUser("alice", "fubar")
+	b, _ := InitUser("patricia", "bussy")
+	c, _ := InitUser("gertrude", "clampot")
+
+	//Sharing and receiving magicword
+	v := []byte("This is a test. ")
+	a.StoreFile("file1", v)
+
+>>>>>>> 03ae446df4dc1f63c1d7e8fa5bdace594932bd2d
 	magicstring, _ := a.ShareFile("file1", "patricia")
 	b.ReceiveFile("file1", "alice", magicstring)
 
 	magicstring2, _ := b.ShareFile("file1", "gertrude")
 	c.ReceiveFile("file1", "patricia", magicstring2)
 
+<<<<<<< HEAD
 	b.RevokeFile("file1", "gertrude")
 	c.AppendFile("file1", []byte("i removed access"))
+=======
+	a.RevokeFile("file1", "patricia")
+	b.AppendFile("file1", []byte("i removed access"))
+>>>>>>> 03ae446df4dc1f63c1d7e8fa5bdace594932bd2d
 
 	afile,_ := a.LoadFile("file1")
 	bfile,_ := b.LoadFile("file1")
 	cfile,_ := c.LoadFile("file1")
 
+<<<<<<< HEAD
 	if reflect.DeepEqual(cfile, bfile) {
 		t.Error("should not be same")
 		return
 	}
 	if reflect.DeepEqual(afile, cfile) {
 		t.Error("should not be same")
+=======
+	if reflect.DeepEqual(afile, bfile) {
+		t.Error("should not be same")
+		return
+	}
+	if !reflect.DeepEqual(bfile, cfile) {
+		t.Error("should be same")
+>>>>>>> 03ae446df4dc1f63c1d7e8fa5bdace594932bd2d
 		return
 	}
 	if !reflect.DeepEqual(afile, bfile) {
@@ -473,7 +734,34 @@ func TestRevokeFile3(t *testing.T) {
 	}
 }
 
+<<<<<<< HEAD
 func TestRevokeFile7(t *testing.T) {
+=======
+}
+
+func TestRevokeFile8(t *testing.T) {
+	userlib.DatastoreClear()
+	userlib.KeystoreClear()
+	a, _ := InitUser("alice", "fubar")
+	InitUser("patricia", "bussy")
+
+	//Sharing and receiving magicword
+	v := []byte("This is a test. ")
+	a.StoreFile("file1", v)
+
+	a.ShareFile("file1", "patricia")
+	error := a.RevokeFile("file1", "patricia")
+	if error == nil {
+		t.Error("cannot revoke user!")
+	}
+
+
+
+
+}
+
+func TestRevokeFile2(t *testing.T) {
+>>>>>>> 03ae446df4dc1f63c1d7e8fa5bdace594932bd2d
 	userlib.DatastoreClear()
 	userlib.KeystoreClear()
 	a, _ := InitUser("alice", "fubar")
@@ -487,16 +775,24 @@ func TestRevokeFile7(t *testing.T) {
 	magicstring, _ := a.ShareFile("file1", "patricia")
 	b.ReceiveFile("file1", "alice", magicstring)
 
+<<<<<<< HEAD
 	magicstring2, _ := a.ShareFile("file1", "gertrude")
 	c.ReceiveFile("file1", "alice", magicstring2)
 
 	a.RevokeFile("file1", "gertrude")
+=======
+	magicstring2, _ := b.ShareFile("file1", "gertrude")
+	c.ReceiveFile("file1", "patricia", magicstring2)
+
+	b.RevokeFile("file1", "gertrude")
+>>>>>>> 03ae446df4dc1f63c1d7e8fa5bdace594932bd2d
 	a.AppendFile("file1", []byte("i removed access"))
 
 	afile,_ := a.LoadFile("file1")
 	bfile,_ := b.LoadFile("file1")
 	cfile,_ := c.LoadFile("file1")
 
+<<<<<<< HEAD
 	if reflect.DeepEqual(cfile, bfile) {
 		t.Error("should not be same")
 		return
@@ -514,6 +810,23 @@ func TestRevokeFile7(t *testing.T) {
 
 
 func TestRevokeFile4(t *testing.T) {
+=======
+	if !reflect.DeepEqual(afile, bfile) {
+		t.Error("should be same")
+		return
+	}
+	if reflect.DeepEqual(afile, cfile) {
+		t.Error("should not be same")
+		return
+	}
+	if reflect.DeepEqual(bfile, cfile) {
+		t.Error("should not be same")
+		return
+	}
+}
+
+func TestRevokeFile3(t *testing.T) {
+>>>>>>> 03ae446df4dc1f63c1d7e8fa5bdace594932bd2d
 	userlib.DatastoreClear()
 	userlib.KeystoreClear()
 	a, _ := InitUser("alice", "fubar")
@@ -526,6 +839,194 @@ func TestRevokeFile4(t *testing.T) {
 
 	magicstring, _ := a.ShareFile("file1", "patricia")
 	b.ReceiveFile("file1", "alice", magicstring)
+
+	magicstring2, _ := b.ShareFile("file1", "gertrude")
+	c.ReceiveFile("file1", "patricia", magicstring2)
+
+	b.RevokeFile("file1", "gertrude")
+<<<<<<< HEAD
+	c.ReceiveFile("file1", "patricia", magicstring2)
+=======
+>>>>>>> 03ae446df4dc1f63c1d7e8fa5bdace594932bd2d
+	c.AppendFile("file1", []byte("i removed access"))
+
+	afile,_ := a.LoadFile("file1")
+	bfile,_ := b.LoadFile("file1")
+	cfile,_ := c.LoadFile("file1")
+
+	if reflect.DeepEqual(cfile, bfile) {
+		t.Error("should not be same")
+		return
+	}
+	if reflect.DeepEqual(afile, cfile) {
+		t.Error("should not be same")
+<<<<<<< HEAD
+=======
+		return
+	}
+	if !reflect.DeepEqual(afile, bfile) {
+		t.Error("should be same")
+>>>>>>> 03ae446df4dc1f63c1d7e8fa5bdace594932bd2d
+		return
+	}
+}
+
+<<<<<<< HEAD
+
+
+func TestHack4(t *testing.T) {
+=======
+func TestRevokeFile7(t *testing.T) {
+>>>>>>> 03ae446df4dc1f63c1d7e8fa5bdace594932bd2d
+	userlib.DatastoreClear()
+	userlib.KeystoreClear()
+	a, _ := InitUser("alice", "fubar")
+	b, _ := InitUser("patricia", "bussy")
+	c, _ := InitUser("gertrude", "clampot")
+<<<<<<< HEAD
+	d, _ := InitUser("belinda", "mussels")
+
+=======
+
+	//Sharing and receiving magicword
+>>>>>>> 03ae446df4dc1f63c1d7e8fa5bdace594932bd2d
+	v := []byte("This is a test. ")
+	a.StoreFile("file1", v)
+
+	magicstring, _ := a.ShareFile("file1", "patricia")
+	b.ReceiveFile("file1", "alice", magicstring)
+
+<<<<<<< HEAD
+	magicstring2, _ := b.ShareFile("file1", "gertrude")
+	c.ReceiveFile("file1", "patricia", magicstring2)
+
+	magicstring3, _ := a.ShareFile("file1", "belinda")
+	d.ReceiveFile("file1", "belinda", magicstring3)
+
+	a.RevokeFile("file1", "patricia")
+	magicstring4, _ := d.ShareFile("file1", "patricia")
+	b.ReceiveFile("file1", "belinda", magicstring4)
+
+	b.AppendFile("file1", []byte("im still here"))
+=======
+	magicstring2, _ := a.ShareFile("file1", "gertrude")
+	c.ReceiveFile("file1", "alice", magicstring2)
+
+	a.RevokeFile("file1", "gertrude")
+	a.AppendFile("file1", []byte("i removed access"))
+>>>>>>> 03ae446df4dc1f63c1d7e8fa5bdace594932bd2d
+
+	afile,_ := a.LoadFile("file1")
+	bfile,_ := b.LoadFile("file1")
+	cfile,_ := c.LoadFile("file1")
+<<<<<<< HEAD
+	dfile,_ := d.LoadFile("file1")
+
+	if !reflect.DeepEqual(afile, bfile) {
+		t.Error("should be same")
+		return
+	}
+	if !reflect.DeepEqual(afile, dfile) {
+		t.Error("should be same")
+		return
+	}
+	if !reflect.DeepEqual(dfile, bfile) {
+		t.Error("should be same")
+		return
+	}
+	if reflect.DeepEqual(cfile, dfile) {
+		t.Error("should not be same")
+		return
+	}
+	if reflect.DeepEqual(cfile, afile) {
+		t.Error("should not be same")
+		return
+	}
+	if reflect.DeepEqual(cfile, bfile) {
+=======
+
+	if reflect.DeepEqual(cfile, bfile) {
+		t.Error("should not be same")
+		return
+	}
+	if reflect.DeepEqual(afile, cfile) {
+>>>>>>> 03ae446df4dc1f63c1d7e8fa5bdace594932bd2d
+		t.Error("should not be same")
+		return
+	}
+	if !reflect.DeepEqual(afile, bfile) {
+		t.Error("should be same")
+		return
+	}
+}
+
+
+
+<<<<<<< HEAD
+}
+func TestHack1(t *testing.T) {
+	userlib.DatastoreClear()
+	InitUser("alice", "fubar")
+	for k, _ := range userlib.DatastoreGetMap() {
+		userlib.DatastoreSet(k, []byte("corrupt random file"))
+	}
+	_, error := GetUser("alice","fubar")
+	if error == nil {
+		t.Error("can't get mutated user!")
+		return
+	}
+}
+
+
+func TestHack5(t *testing.T) {
+=======
+func TestRevokeFile4(t *testing.T) {
+>>>>>>> 03ae446df4dc1f63c1d7e8fa5bdace594932bd2d
+	userlib.DatastoreClear()
+	userlib.KeystoreClear()
+	a, _ := InitUser("alice", "fubar")
+	b, _ := InitUser("patricia", "bussy")
+	c, _ := InitUser("gertrude", "clampot")
+<<<<<<< HEAD
+	d, _ := InitUser("belinda", "mussels")
+
+=======
+
+	//Sharing and receiving magicword
+>>>>>>> 03ae446df4dc1f63c1d7e8fa5bdace594932bd2d
+	v := []byte("This is a test. ")
+	a.StoreFile("file1", v)
+
+	magicstring, _ := a.ShareFile("file1", "patricia")
+	b.ReceiveFile("file1", "alice", magicstring)
+<<<<<<< HEAD
+
+	magicstring2, _ := b.ShareFile("file1", "gertrude")
+	c.ReceiveFile("file1", "patricia", magicstring2)
+
+	magicstring3, _ := a.ShareFile("file1", "belinda")
+	d.ReceiveFile("file1", "belinda", magicstring3)
+
+	for k, actual := range userlib.DatastoreGetMap() {
+		saved := actual
+		userlib.DatastoreSet(k, []byte("corrupt random file"))
+		_, error := c.LoadFile("file1")
+		if error != nil {
+			t.Error("corrupted again")
+		}
+		userlib.DatastoreSet(k, saved)
+	}
+}
+
+func TestHack6(t *testing.T) {
+	userlib.DatastoreClear()
+	userlib.KeystoreClear()
+	a, _ := InitUser("alice", "fubar")
+	b, _ := InitUser("patricia", "bussy")
+	c, _ := InitUser("gertrude", "clampot")
+	d, _ := InitUser("belinda", "mussels")
+
+=======
 
 	magicstring2, _ := b.ShareFile("file1", "gertrude")
 	c.ReceiveFile("file1", "patricia", magicstring2)
@@ -558,6 +1059,7 @@ func TestHack4(t *testing.T) {
 	c, _ := InitUser("gertrude", "clampot")
 	d, _ := InitUser("belinda", "mussels")
 
+>>>>>>> 03ae446df4dc1f63c1d7e8fa5bdace594932bd2d
 	v := []byte("This is a test. ")
 	a.StoreFile("file1", v)
 
@@ -570,6 +1072,16 @@ func TestHack4(t *testing.T) {
 	magicstring3, _ := a.ShareFile("file1", "belinda")
 	d.ReceiveFile("file1", "belinda", magicstring3)
 
+<<<<<<< HEAD
+	for k, actual := range userlib.DatastoreGetMap() {
+		saved := actual
+		userlib.DatastoreSet(k, []byte("corrupt random file"))
+		error := a.RevokeFile("file1", "patricia")
+		if error != nil {
+			t.Error("corrupted again")
+		}
+		userlib.DatastoreSet(k, saved)
+=======
 	a.RevokeFile("file1", "patricia")
 	magicstring4, _ := d.ShareFile("file1", "patricia")
 	b.ReceiveFile("file1", "belinda", magicstring4)
@@ -604,8 +1116,71 @@ func TestHack4(t *testing.T) {
 	if reflect.DeepEqual(cfile, bfile) {
 		t.Error("should not be same")
 		return
+>>>>>>> 03ae446df4dc1f63c1d7e8fa5bdace594932bd2d
+	}
+}
+
+<<<<<<< HEAD
+func TestHack7(t *testing.T) {
+	userlib.DatastoreClear()
+	userlib.KeystoreClear()
+	a, _ := InitUser("alice", "fubar")
+	b, _ := InitUser("patricia", "bussy")
+	c, _ := InitUser("gertrude", "clampot")
+	d, _ := InitUser("belinda", "mussels")
+
+	v := []byte("This is a test. ")
+	a.StoreFile("file1", v)
+
+	magicstring, _ := a.ShareFile("file1", "patricia")
+	b.ReceiveFile("file1", "alice", magicstring)
+
+	magicstring2, _ := b.ShareFile("file1", "gertrude")
+	c.ReceiveFile("file1", "patricia", magicstring2)
+
+	magicstring3, _ := a.ShareFile("file1", "belinda")
+	d.ReceiveFile("file1", "belinda", magicstring3)
+
+	for k, actual := range userlib.DatastoreGetMap() {
+		saved := actual
+		userlib.DatastoreSet(k, []byte("corrupt random file"))
+		_, error := a.ShareFile("file1", "gertrude")
+		if error != nil {
+			t.Error("corrupted again")
+		}
+		userlib.DatastoreSet(k, saved)
+	}
+}
+func TestHack8(t *testing.T) {
+	userlib.DatastoreClear()
+	userlib.KeystoreClear()
+	a, _ := InitUser("alice", "fubar")
+	b, _ := InitUser("patricia", "bussy")
+	c, _ := InitUser("gertrude", "clampot")
+
+	v := []byte("This is a test. ")
+	a.StoreFile("file1", v)
+
+	magicstring, _ := a.ShareFile("file1", "patricia")
+	b.ReceiveFile("file1", "alice", magicstring)
+
+	error := c.ReceiveFile("file1", "alice", magicstring)
+	if error == nil {
+		t.Error("he doesnt have access!")
+		return
+	}
+	_, error = c.LoadFile("file1")
+	if error == nil {
+		t.Error("he doesnt have access")
+		return
+	}
+	error = c.AppendFile("file1", []byte("he"))
+	if error == nil {
+		t.Error("no access")
+		return
 	}
 
+=======
 }
 func TestHack1(t *testing.T) {
 	userlib.DatastoreClear()
@@ -650,6 +1225,7 @@ func TestHack5(t *testing.T) {
 		}
 		userlib.DatastoreSet(k, saved)
 	}
+>>>>>>> 03ae446df4dc1f63c1d7e8fa5bdace594932bd2d
 }
 
 func TestHack6(t *testing.T) {
@@ -742,7 +1318,7 @@ func TestHack8(t *testing.T) {
 		return
 	}
 
+<<<<<<< HEAD
+=======
 }
-
-
-
+>>>>>>> 03ae446df4dc1f63c1d7e8fa5bdace594932bd2d
