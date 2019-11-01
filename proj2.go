@@ -450,8 +450,9 @@ func (userdata *User) LoadFile(filename string) (data []byte, err error) {
 	var file []byte
 
 	if len(userFile.SavedMeta) > 0 {
+		verified := userFile.VerifyUserPermissions()
 
-		if !userFile.VerifyUserPermissions(string(userFile.SavedMetaDS[0])) {
+		if _, ok := verified[string(userFile.SavedMetaDS[0])]; !ok {
 			return nil, errors.New("file was corrupted")
 		}
 
@@ -485,7 +486,7 @@ func (userdata *User) LoadFile(filename string) (data []byte, err error) {
 		}
 		file = append(file, fileBlock...)
 	}
-	return
+	return file, err
 }
 
 func EvaluateMetadata(user *User, meta [4][]byte, index int) ([]byte, error){
@@ -550,52 +551,81 @@ func EvaluateMetadata(user *User, meta [4][]byte, index int) ([]byte, error){
 }
 
 // Checks to see if the user is in one of the permissions, either parent or children.
-func (userFile *UserFile) VerifyUserPermissions(username string) bool {
-	visited := make(map[string]bool)
-	return userFile.Search(username, visited)
+func (userFile *UserFile) VerifyUserPermissions() map[string]uuid.UUID {
+	verified := make(map[string]uuid.UUID)
+	//Traverse up to the owner of the file and add the owner to our verified list
+	uuid := userFile.Parent
+	owner, err := RetrieveUserFile(uuid)
+	for err == nil {
+		uuid = owner.Parent
+		owner, err = RetrieveUserFile(uuid)
+	}
+	verified[owner.Username] = uuid
+	Traverse(&verified, owner)
+	return verified
+
 }
+
+
+
+func Traverse(verified *map[string]uuid.UUID, userFile *UserFile) error {
+	if len(userFile.Children) == 0 {
+		return errors.New("ratchet")
+	}
+	for username, uuid := range userFile.Children {
+		(*verified)[username] = uuid
+		ufile, err := RetrieveUserFile(uuid)
+		if err != nil {
+			return errors.New("something really ratchet happened")
+		}
+		Traverse(verified, ufile)
+	}
+	return nil
+}
+
 // Essentially DFS that ends early. Helper function for VerifyUserPermissions.
-func (userFile *UserFile) Search(username string, visited map[string]bool) bool {
-	visited[userFile.Username] = true
-	if userFile.Username == username {
-		return true
-	}
-
-	// Verify and visit children
-	verKey, ok := GetPublicVerKey(userFile.Username)
-	if ok {
-		serialChildren, _ := json.Marshal(userFile.Children)
-		err := userlib.DSVerify(verKey, serialChildren, userFile.ChildrenDS)
-		if err == nil {
-			if _, ok := userFile.Children[username]; ok {
-				return true
-			}
-
-			for _, uuidUF := range userFile.Children {
-				uf, err := RetrieveUserFile(uuidUF)
-				if err == nil && !visited[uf.Username] {
-					if uf.Search(username, visited) {
-						return true
-					}
-				}
-			}
-		}
-	}
-
-	// Verify and visit parent
-	uf, err := RetrieveUserFile(userFile.Parent)
-	if err == nil && !visited[uf.Username] {
-		verKey, ok := GetPublicVerKey(uf.Username)
-		if ok {
-			err = userlib.DSVerify(verKey, []byte(userFile.Parent.String()), userFile.ParentDS)
-			if err == nil && uf.Search(username, visited) {
-				return true
-			}
-		}
-	}
-
-	return false
-}
+//func (userFile *UserFile) Search(username string, visited map[string]bool) bool {
+//	visited[userFile.Username] = true
+//	//Questionable?? Even if the username that we r searching matches userfile.username doesnt mean that it has permission
+//	if userFile.Username == username {
+//		return true
+//	}
+//
+//	// Verify and visit children
+//	verKey, ok := GetPublicVerKey(userFile.Username)
+//	if ok {
+//		serialChildren, _ := json.Marshal(userFile.Children)
+//		err := userlib.DSVerify(verKey, serialChildren, userFile.ChildrenDS)
+//		if err == nil {
+//			if _, ok := userFile.Children[username]; ok {
+//				return true
+//			}
+//
+//			for _, uuidUF := range userFile.Children {
+//				uf, err := RetrieveUserFile(uuidUF)
+//				if err == nil && !visited[uf.Username] {
+//					if uf.Search(username, visited) {
+//						return true
+//					}
+//				}
+//			}
+//		}
+//	}
+//
+//	// Verify and visit parent
+//	uf, err := RetrieveUserFile(userFile.Parent)
+//	if err == nil && !visited[uf.Username] {
+//		verKey, ok := GetPublicVerKey(uf.Username)
+//		if ok {
+//			err = userlib.DSVerify(verKey, []byte(userFile.Parent.String()), userFile.ParentDS)
+//			if err == nil && uf.Search(username, visited) {
+//				return true
+//			}
+//		}
+//	}
+//
+//	return false
+//}
 // This creates a sharing record, which is a key pointing to something
 // in the datastore to share with the recipient.
 
