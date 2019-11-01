@@ -4,6 +4,7 @@ package proj2
 // imports it will break the autograder, and we will be Very Upset.
 
 import (
+	"fmt"
 	// You need to add with
 	// go get github.com/cs161-staff/userlib
 	"github.com/cs161-staff/userlib"
@@ -209,7 +210,6 @@ func (userFile *UserFile) UpdateMetadata(recipient string, sender *User, uuidFil
 	ds, _ := userlib.DSSign(sender.SignKey, []byte(msg))
 
 	userFile.ChangesMeta[len(userFile.ChangesMeta)] = [4][]byte{eUsername, eUUID, eKey, ds}
-
 	serialUF, _ := json.Marshal(userFile)
 	userlib.DatastoreSet(userFile.UUID, serialUF)
 }
@@ -496,6 +496,7 @@ func (userdata *User) LoadFile(filename string) (data []byte, err error) {
 		// Evaluate items in SavedMeta. We do NOT need to verify each signature.
 		for _, elem := range userFile.SavedMeta {
 			fileBlock, err := EvaluateMetadata(userdata, elem,-1)
+			fmt.Println(string(fileBlock))
 			if err != nil {
 				return nil, err
 			}
@@ -516,8 +517,8 @@ func (userdata *User) LoadFile(filename string) (data []byte, err error) {
 		if _, ok := verified[string(username)]; !ok {
 			return file, errors.New("rest of file corrupted")
 		}
-
 		fileBlock, err := EvaluateMetadata(userdata, userFile.ChangesMeta[index], index)
+		fmt.Println(string(fileBlock))
 		if err != nil {
 			return nil, err
 		}
