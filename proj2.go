@@ -152,7 +152,7 @@ type UserFile struct {
 	ChildrenDS []byte // digital signature of children
 
 	Parent uuid.UUID // uuid of parent that gave this user access. uuid.NIL if no parent
-	ParentDS []byte // digital signature by the parent. NIL if no parent
+	ParentDS []byte // digital signature by the parent. NIL if no parent. MARSHAL parent
 
 	SavedMeta map[int][4][]byte // e(username), e(uuid), e(key), ds
 	SavedMetaDS [2][]byte // first element is username, second element is DS of user. non encrypted
@@ -168,7 +168,9 @@ func (userdata *User) NewUserFile(username string, UUID uuid.UUID, parent uuid.U
 	f.Children = make(map[string]uuid.UUID)
 	f.Parent = parent
 	if parent != uuid.Nil {
-		parentDS, _ := userlib.DSSign(userdata.SignKey, []byte(parent.String()))
+		msg, _ := json.Marshal(f.Parent)
+
+		parentDS, _ := userlib.DSSign(userdata.SignKey, msg)
 		f.ParentDS = parentDS
 	}
 
@@ -439,6 +441,7 @@ func (userdata *User) SetFileNameToUUID(filename string, uuid uuid.UUID) {
 
 }
 
+// returns true if filename exists
 func (userdata *User) GetUUIDFromFileName(filename string) (uuid uuid.UUID, ok bool) {
 	name, _ := userlib.HMACEval(userdata.HMACKey, []byte(filename))
 	fakeUUID := bytesToUUID(name)
@@ -500,7 +503,7 @@ func (userdata *User) LoadFile(filename string) (data []byte, err error) {
 		// Verify signer is a permissible user
 		name := string(userFile.SavedMetaDS[0])
 		if _, ok := verified[name]; !ok {
-			return nil, errors.New("saved was corrupted")
+			return nil, errors.New("can't load, saved was corrupted")
 		}
 
 		// Check digital signature
@@ -579,18 +582,24 @@ func (userFile *UserFile) RetrieveOwner() *UserFile {
 	owner := userFile
 	for owner.Parent != uuid.Nil {
 		// Verify that parent is signed first
-		verKey, ok := GetPublicVerKey(owner.Username)
-		if ok {
-			err := userlib.DSVerify(verKey, []byte(userFile.Parent.String()), userFile.ParentDS)
-			if err == nil {
-				parent, err := RetrieveUserFile(owner.Parent)
-				if err != nil {
-					break
-				}
-				owner = parent
-			}
+		parent, err := RetrieveUserFile(owner.Parent)
+		if err != nil {
+			break
 		}
+
+		verKey, ok := GetPublicVerKey(parent.Username)
+		if !ok {
+			break
+		}
+			msg, _ := json.Marshal(userFile.Parent)
+			err = userlib.DSVerify(verKey, msg, userFile.ParentDS)
+			if err != nil {
+				break
+			}
+
+			owner = parent
 	}
+
 	return owner
 }
 // Checks to see if the user is in one of the permissions, either parent or children.
@@ -600,13 +609,17 @@ func (userFile *UserFile) ValidUsers() map[string]uuid.UUID {
 	// Traverse up to the owner of the file
 	owner := userFile.RetrieveOwner()
 
+	// could be recurisve problem in traverse
+	//fmt.Print(userFile.Username)
+	//if userFile.Username == "bob" {
+	//	fmt.Print("STARTING")
+	//}
 	_ = Traverse(&verified, owner)
 	return verified
 }
 
 func Traverse(verified *map[string]uuid.UUID, userFile *UserFile) error {
 	(*verified)[userFile.Username] = userFile.UUID
-
 	// Verify children
 	verKey, ok := GetPublicVerKey(userFile.Username)
 	if !ok {
@@ -666,7 +679,7 @@ func (userdata *User) ShareFile(filename string, recipient string) (
 	if len(uf.SavedMeta) > 0 {
 		name := string(uf.SavedMetaDS[0])
 		if _, ok := verified[name]; !ok {
-			return "", errors.New("saved was corrupted")
+			return "", errors.New("can't share, saved was corrupted")
 		}
 
 		msg, _ := json.Marshal(uf.SavedMeta)
@@ -707,6 +720,11 @@ func (userdata *User) ShareFile(filename string, recipient string) (
 		newUF.UpdateSavedMetadata(name, uuidFile, key)
 	}
 
+	// Now sign saved.
+	newUF.SavedMetaDS[0] = []byte(userdata.Username)
+	msg, _ := json.Marshal(newUF.SavedMeta)
+	newUF.SavedMetaDS[1], _ = userlib.DSSign(userdata.SignKey, msg)
+
 	// For all UFs: Append each meta in changes to saved.
 	for _, UUID := range verified {
 		otherUF, err := RetrieveUserFile(UUID)
@@ -728,7 +746,7 @@ func (userdata *User) ShareFile(filename string, recipient string) (
 
 	// Include the new UF in our children. Sign it.
 	uf.Children[recipient] = newUF.UUID
-	msg, _ := json.Marshal(uf.Children)
+	msg, _ = json.Marshal(uf.Children)
 	ds, _ := userlib.DSSign(userdata.SignKey, msg)
 	uf.ChildrenDS = ds
 
@@ -742,12 +760,14 @@ func (userdata *User) ShareFile(filename string, recipient string) (
 
 	// Generate the magic string: w/ random uuid and signature. encrypted ofc
 	pubKey, _ := GetPublicEncKey(recipient)
-	eUUID, _ := userlib.PKEEnc(pubKey, []byte(uuidNewUF.String()))
+	byteUUID, _ := json.Marshal(newUF.UUID.String())
+	eUUID, _ := userlib.PKEEnc(pubKey, byteUUID)
 	msDS, _ := userlib.DSSign(userdata.SignKey, eUUID)
+
 	magic_string = string(eUUID) + string(msDS)
+
 	return magic_string, nil
 }
-
 
 // Note recipient's filename can be different from the sender's filename.
 // The recipient should not be able to discover the sender's view on
@@ -756,12 +776,43 @@ func (userdata *User) ShareFile(filename string, recipient string) (
 func (userdata *User) ReceiveFile(filename string, sender string,
 	magic_string string) error {
 
-		//if filename already exists error out
+	// if filename already exists error out
+	_, notOK := userdata.GetUUIDFromFileName(filename)
+	if notOK {
+		return errors.New("file already exists")
+	}
+
+	eUUID := []byte(magic_string[:256])
+	msDS := []byte(magic_string[256:])
+
 	// Verify signer
+	verKey, _ := GetPublicVerKey(sender)
+	err := userlib.DSVerify(verKey, eUUID, msDS)
+	if err != nil {
+		return errors.New("authenticity compromised")
+	}
+
 	// Decrypt magic string with private key to retrieve UUID
+	msg, _ := userlib.PKEDec(userdata.DecKey, eUUID)
+	var uuidUF uuid.UUID
+	_ = json.Unmarshal(msg, &uuidUF)
+
 	// Assign hashed file name to UUID
+	userdata.SetFileNameToUUID(filename, uuidUF)
+
 	// Access UF to confirm
+	_, err = RetrieveUserFile(uuidUF)
+	if err != nil {
+		return err
+	}
+
 	// Reload userdata
+	var blob Blob
+	err = userdata.UploadUser(&blob)
+
+	if err != nil {
+		return err
+	}
 
 	return nil
 }
@@ -769,8 +820,14 @@ func (userdata *User) ReceiveFile(filename string, sender string,
 // Removes target user's access.
 func (userdata *User) RevokeFile(filename string, target_username string) (err error) {
 	// retrieve userfile
+	//uuidUF, ok := userdata.GetUUIDFromFileName(filename)
+	//if !ok {
+	//	return errors.New("file does not exist")
+	//}
 
 	// verify saved and changes --> add changes to saved and sign
+
+
 	// do this for every user EXCEPT revoked user (unless you have to then it's ok)
 	// reupload every UF
 	// verify UF.children

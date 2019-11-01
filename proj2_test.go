@@ -297,6 +297,7 @@ func TestShare(t *testing.T) {
 	var magic_string string
 
 	v, err = u.LoadFile("file1")
+
 	if err != nil {
 		t.Error("Failed to download the file from alice", err)
 		return
@@ -307,17 +308,19 @@ func TestShare(t *testing.T) {
 		t.Error("Failed to share the a file", err)
 		return
 	}
-	err = u2.ReceiveFile("file2", "alice", magic_string)
+
+	err = u2.ReceiveFile("file3", "alice", magic_string)
 	if err != nil {
 		t.Error("Failed to receive the share message", err)
 		return
 	}
 
-	v2, err = u2.LoadFile("file2")
+	v2, err = u2.LoadFile("file3")
 	if err != nil {
 		t.Error("Failed to download the file after sharing", err)
 		return
 	}
+
 	if !reflect.DeepEqual(v, v2) {
 		t.Error("Shared file is not the same", v, v2)
 		return
