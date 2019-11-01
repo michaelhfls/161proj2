@@ -433,20 +433,20 @@ func (userdata *User) AppendFile(filename string, data []byte) (err error) {
 
 	userFile, err := RetrieveUserFile(uuidUserFile)
 	if err != nil {
-		return err
+		return errors.New("Userfile for this file does not exist")
 	}
 
 	// Upload file
 	uuidNewFile, encKey := UploadFile(data, userdata.SignKey)
 
 	// retrieve owner of file
-	for ; err == nil && userFile.Parent != uuid.Nil; {
+	for err == nil && userFile.Parent != uuid.Nil {
 		userFile, err = RetrieveUserFile(userFile.Parent)
 	}
 
 	// iterate through children...
 	if err != nil {
-		return err
+		return errors.New("this is the owner but not the original orignal owner of the file")
 	}
 
 	userFile.UpdateAllMetadata(userdata, uuidNewFile, encKey)
@@ -463,7 +463,7 @@ func (userdata *User) LoadFile(filename string) (data []byte, err error) {
 		return nil, errors.New("file does not exist")
 	}
 
-	userFile, err := RetrieveUserFile(uuidUF)
+	userFile, err :=  RetrieveUserFile(uuidUF)
 	if err != nil {
 		return nil, err
 	}

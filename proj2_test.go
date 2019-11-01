@@ -221,7 +221,7 @@ func TestAppend(t *testing.T) {
 	}
 
 	if !reflect.DeepEqual(v, v0) {
-		t.Error("Failed to load file", v0)
+		t.Error("File doesn't match what we put in", v0)
 	}
 
 	// append with current userdata
@@ -242,7 +242,125 @@ func TestAppend(t *testing.T) {
 		t.Error("Failed to append file", v2)
 	}
 
+
 	// writes test swith append with retrieved userdata using getuser
+}
+
+func TestRevokeFile(t *testing.T) {
+	userlib.DatastoreClear()
+	userlib.KeystoreClear()
+	a, err := InitUser("alice", "fubar")
+	if err != nil {
+		t.Error("Failed to initialize user", err)
+		return
+	}
+	b, err := InitUser("patricia", "bussy")
+	if err != nil {
+		t.Error("Failed to initialize user", err)
+		return
+	}
+	c, err := InitUser("gertrude", "clampot")
+	if err != nil {
+		t.Error("Failed to initialize user", err)
+		return
+	}
+	d, err := InitUser("ryshandala", "paninipress")
+	if err != nil {
+		t.Error("Failed to initialize user", err)
+		return
+	}
+
+
+
+	//Sharing and receiving magicword
+	v := []byte("This is a test. ")
+	a.StoreFile("file1", v)
+	magicstring, error := a.ShareFile("file1", "patricia")
+	if error != nil {
+		t.Error("Sharing the magic word flopped")
+	}
+	error = b.ReceiveFile("file1", "alice", magicstring)
+	if error != nil {
+		t.Error("something flopped with receiving the magic word")
+	}
+	error = c.ReceiveFile("file1", "alice", magicstring)
+	if error != nil {
+		t.Error("something flopped with receiving the magic word")
+	}
+	magicstring, error = b.ShareFile("file1", "ryshandala")
+	if error != nil {
+		t.Error("Sharing the magic word flopped")
+	}
+	error = d.ReceiveFile("file1", "patricia", magicstring)
+	if error != nil {
+		t.Error("something flopped with receiving the magic word")
+	}
+
+
+	//check load access
+	afile, error := a.LoadFile("file1")
+	if error != nil {
+		t.Error("Alice flopped loading the file after sharing with patricia")
+	}
+	bfile, error := b.LoadFile("file1")
+	if error != nil {
+		t.Error("Patricia could not load the file that was shared with her")
+	}
+	cfile, error := a.LoadFile("file1")
+	if error != nil {
+		t.Error("Gertrude flopped loading the file after sharing with patricia")
+	}
+	dfile, error := b.LoadFile("file1")
+	if error != nil {
+		t.Error("Ryshandala could not load the file that was shared with her")
+	}
+	if !reflect.DeepEqual(afile, bfile) {
+		t.Error("patricia and alice are not loading the same files")
+	}
+	if !reflect.DeepEqual(afile, cfile) {
+		t.Error("alice and gertrude are not loading the same files")
+	}
+	if !reflect.DeepEqual(afile, dfile) {
+		t.Error("alice and ryshandala are not loading the same files")
+	}
+
+
+	error = a.AppendFile("file1", []byte("Patricia is a poopy head!"))
+	if error != nil {
+		t.Error("Alice couldn't append to her own file after sharing it!")
+	}
+	afile, error = a.LoadFile("file1")
+	if error != nil {
+		t.Error("Alice flopped loading the file after sharing with patricia and appending")
+	}
+	bfile, error = b.LoadFile("file1")
+	if error != nil {
+		t.Error("Patricia could not load the file that was shared with her after alice appended")
+	}
+	if !reflect.DeepEqual(afile, bfile) {
+		t.Error("patricia and alice are not loading the same files")
+	}
+
+	error = b.AppendFile("file1", []byte("Alice is a poopyhead!"))
+	if error != nil {
+		t.Error("Patricia couldn't append to the file that was shared with her!")
+	}
+	afile, error = a.LoadFile("file1")
+	if error != nil {
+		t.Error("Alice flopped loading the file after Patricia appended")
+	}
+	bfile, error = b.LoadFile("file1")
+	if error != nil {
+		t.Error("Patricia could not load the file that was shared with her after she appended")
+	}
+	if !reflect.DeepEqual(afile, bfile) {
+		t.Error("patricia and alice are not loading the same files")
+	}
+
+
+
+
+
 }
 
 //func TestShare(t *testing.T) {
