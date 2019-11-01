@@ -4,7 +4,6 @@ package proj2
 // imports it will break the autograder, and we will be Very Upset.
 
 import (
-	"fmt"
 	// You need to add with
 	// go get github.com/cs161-staff/userlib
 	"github.com/cs161-staff/userlib"
