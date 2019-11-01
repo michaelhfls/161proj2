@@ -88,9 +88,6 @@ func TestGetUser(t *testing.T) {
 
 }
 
-
-
-
 func TestStorage(t *testing.T) {
 	// And some more tests, because
 	userlib.DatastoreClear()
