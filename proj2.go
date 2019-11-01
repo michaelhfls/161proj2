@@ -501,8 +501,7 @@ func (userdata *User) LoadFile(filename string) (data []byte, err error) {
 	// verify if everyone in changesmeta is valid and verify if the digital signatures are all good
 	// todo: maybe do a quick verify by passing all the checked users in one go...
 	// todo: don't forget to check index!!!! set counter maybe?
-	index := 0
-	for i := 0; i < len(userFile.ChangesMeta); i++ {
+	for index := 0; index < len(userFile.ChangesMeta); index++ {
 		username, err := userlib.PKEDec(userdata.DecKey, userFile.ChangesMeta[index][0])
 
 		if err != nil {
@@ -515,7 +514,6 @@ func (userdata *User) LoadFile(filename string) (data []byte, err error) {
 			}
 			file = append(file, fileBlock...)
 		}
-		index++
 	}
 
 	return file, nil
