@@ -4,7 +4,6 @@ package proj2
 // imports it will break the autograder, and we will be Very Upset.
 
 import (
-	"fmt"
 	// You need to add with
 	// go get github.com/cs161-staff/userlib
 	"github.com/cs161-staff/userlib"
@@ -484,7 +483,7 @@ func (userdata *User) LoadFile(filename string) (data []byte, err error) {
 
 		// Error check
 		if err != nil {
-			return nil, errors.New("The saved metadata is not valid")
+			return nil, errors.New("saved metadata is invalid")
 		}
 
 		// Evaluate items in SavedMeta. We do NOT need to verify each signature.

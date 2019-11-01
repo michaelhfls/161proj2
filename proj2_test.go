@@ -232,8 +232,6 @@ func TestAppend(t *testing.T) {
 		return
 	}
 
-	t.Log("ok ", len(userlib.DatastoreGetMap()))
-
 	v2, err2 := a.LoadFile("file1")
 	if err2 != nil {
 		t.Error("Failed to load file", err2)
@@ -244,7 +242,7 @@ func TestAppend(t *testing.T) {
 		t.Error("Failed to append file", v2)
 	}
 
-	// append with retrieved userdata
+	// writes test swith append with retrieved userdata using getuser
 }
 
 //func TestShare(t *testing.T) {
