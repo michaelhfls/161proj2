@@ -4,16 +4,15 @@ package proj2
 // imports it will break the autograder, and we will be Very Upset.
 
 import (
-	"github.com/cs161-staff/userlib"
-	"reflect"
-	"testing"
-	_ "strconv"
-	_ "errors"
-	_ "strings"
-	_ "github.com/google/uuid"
 	_ "encoding/hex"
 	_ "encoding/json"
-
+	_ "errors"
+	"github.com/cs161-staff/userlib"
+	_ "github.com/google/uuid"
+	"reflect"
+	_ "strconv"
+	_ "strings"
+	"testing"
 )
 
 //func TestInit(t *testing.T) {
@@ -301,47 +300,48 @@ import (
 //	}
 //}
 
-func TestShareFile(t *testing.T) {
-	userlib.DatastoreClear()
-	userlib.KeystoreClear()
-
-	a, _ := InitUser("alice", "fubar")
-	b, _ := InitUser("patricia", "bussy")
-
-	//Sharing and receiving magicword
-	a.StoreFile("file1", []byte("This is a test. "))
-	magicstring, error := a.ShareFile("file1", "patricia")
-	if error != nil {
-		t.Error("Sharing the magic word flopped")
-		return
-	}
-	error = b.ReceiveFile("file1", "alice", magicstring)
-	if error != nil {
-		t.Error(error)
-	}
-
-	error = a.AppendFile("file1", []byte("Patricia is a poopy head!"))
-	if error != nil {
-		t.Error(error)
-	}
-
-	afile, err := a.LoadFile("file1")
-	if err != nil {
-		t.Error(err)
-	}
-	bfile, err := b.LoadFile("file1")
-	if err != nil {
-		t.Error(err)
-	}
-
-	if !reflect.DeepEqual(afile, bfile) {
-		t.Error("patricia and alice are not loading the same files", string(afile), " | ", string(bfile))
-		return
-	}
-}
+//func TestShareFile(t *testing.T) {
+//	userlib.DatastoreClear()
+//	userlib.KeystoreClear()
+//
+//	a, _ := InitUser("alice", "fubar")
+//	b, _ := InitUser("patricia", "bussy")
+//
+//	//Sharing and receiving magicword
+//	a.StoreFile("file1", []byte("This is a test. "))
+//	magicstring, error := a.ShareFile("file1", "patricia")
+//	if error != nil {
+//		t.Error("Sharing the magic word flopped")
+//		return
+//	}
+//	error = b.ReceiveFile("file1", "alice", magicstring)
+//	if error != nil {
+//		t.Error(error)
+//	}
+//
+//	error = a.AppendFile("file1", []byte("Patricia is a poopy head!"))
+//	if error != nil {
+//		t.Error(error)
+//	}
+//
+//	afile, err := a.LoadFile("file1")
+//	if err != nil {
+//		t.Error(err)
+//	}
+//
+//	bfile, err := b.LoadFile("file1")
+//	if err != nil {
+//		t.Error(err)
+//	}
+//
+//	if !reflect.DeepEqual(afile, bfile) {
+//		t.Error("patricia and alice are not loading the same files", string(afile), " | ", string(bfile))
+//		return
+//	}
+//}
 //
 //
-//func TestRecieve(t *testing.T) {
+//func TestReceive(t *testing.T) {
 //	userlib.DatastoreClear()
 //	userlib.KeystoreClear()
 //
@@ -355,8 +355,6 @@ func TestShareFile(t *testing.T) {
 //		t.Error("not allowed to share file with same filename!")
 //		return
 //	}
-//
-//
 //}
 //
 //func TestShareFile3(t *testing.T) {
@@ -372,63 +370,117 @@ func TestShareFile(t *testing.T) {
 //	a.StoreFile("file1", v)
 //
 //	magicstring, _ := a.ShareFile("file1", "patricia")
-//	b.ReceiveFile("file1", "alice", magicstring)
+//	err := b.ReceiveFile("file1", "alice", magicstring)
+//	if err != nil {
+//		t.Error(err)
+//	}
 //
 //	magicstring2, _ := b.ShareFile("file1", "gertrude")
-//	c.ReceiveFile("file1", "patricia", magicstring2)
+//	err = c.ReceiveFile("file1", "patricia", magicstring2)
+//	if err != nil {
+//		t.Error(err)
+//	}
 //
-//	c.AppendFile("file1", []byte("Thats not nice!"))
+//	err = c.AppendFile("file1", []byte("That's not nice!"))
+//	if err != nil {
+//		t.Error(err)
+//	}
 //
-//	afile,_ := a.LoadFile("file1")
-//	bfile,_ := b.LoadFile("file1")
-//	cfile,_ := c.LoadFile("file1")
+//	afile, err := a.LoadFile("file1")
+//	if err != nil {
+//		t.Error(err)
+//	}
+//
+//	bfile, err := b.LoadFile("file1")
+//	if err != nil {
+//		t.Error(err)
+//	}
+//	cfile, err := c.LoadFile("file1")
+//	if err != nil {
+//		t.Error(err)
+//	}
 //
 //	if !reflect.DeepEqual(cfile, afile) {
-//		t.Error("should be same")
+//		t.Error("should be same", string(cfile), " | ", string(afile))
 //		return
 //	}
+//
 //	if !reflect.DeepEqual(cfile, bfile) {
-//		t.Error("should be same")
+//		t.Error("should be same", string(cfile), " | ", string(bfile))
 //		return
 //	}
 //
-//}
-//
-//func TestRevokeFile0(t *testing.T) {
-//	userlib.DatastoreClear()
-//	userlib.KeystoreClear()
-//
-//	a, _ := InitUser("alice", "fubar")
-//	b, _ := InitUser("patricia", "bussy")
-//	c, _ := InitUser("gertrude", "clampot")
-//
-//	//Sharing and receiving magicword
-//	v := []byte("This is a test. ")
-//	a.StoreFile("file1", v)
-//
-//	magicstring, _ := a.ShareFile("file1", "patricia")
-//	b.ReceiveFile("file1", "alice", magicstring)
-//
-//	magicstring2, _ := b.ShareFile("file1", "gertrude")
-//	c.ReceiveFile("file1", "patricia", magicstring2)
-//
-//	a.RevokeFile("file1", "patricia")
-//	a.AppendFile("file1", []byte("i removed access"))
-//
-//	afile,_ := a.LoadFile("file1")
-//	bfile,_ := b.LoadFile("file1")
-//	cfile,_ := c.LoadFile("file1")
-//
-//	if reflect.DeepEqual(afile, bfile) {
-//		t.Error("should not be same")
-//		return
-//	}
-//	if reflect.DeepEqual(afile, cfile) {
-//		t.Error("should not be same")
+//	if !reflect.DeepEqual(afile, bfile) {
+//		t.Error("should be same", string(afile), " | ", string(bfile))
 //		return
 //	}
 //}
 //
+func TestRevokeFile0(t *testing.T) {
+	userlib.DatastoreClear()
+	userlib.KeystoreClear()
+
+	a, _ := InitUser("alice", "fubar")
+	b, _ := InitUser("patricia", "bussy")
+	c, _ := InitUser("gertrude", "clampot")
+
+	//Sharing and receiving magicword
+	v := []byte("This is a test. ")
+	a.StoreFile("file1", v)
+
+	magicstring, _ := a.ShareFile("file1", "patricia")
+	err := b.ReceiveFile("file1", "alice", magicstring)
+	if err != nil {
+		t.Error(err)
+	}
+
+	magicstring2, _ := b.ShareFile("file1", "gertrude")
+	err = c.ReceiveFile("file1", "patricia", magicstring2)
+	if err != nil {
+		t.Error(err)
+	}
+
+	err = a.RevokeFile("file1", "patricia")
+	if err != nil {
+		t.Error(err)
+	}
+
+	app := "i removed access"
+	err = a.AppendFile("file1", []byte(app))
+	if err != nil {
+		t.Error(err)
+	}
+
+	afile, err := a.LoadFile("file1")
+	if err != nil {
+		t.Error(err)
+	}
+
+	if !reflect.DeepEqual(afile, append(v, app...)) {
+		t.Error("should not be same")
+		return
+	}
+
+	bfile, err := b.LoadFile("file1")
+	if err != nil {
+		t.Error(err)
+	}
+
+	cfile, err := c.LoadFile("file1")
+	if err != nil {
+		t.Error(err)
+	}
+
+	if reflect.DeepEqual(afile, bfile) {
+		t.Error("should not be same")
+		return
+	}
+	if reflect.DeepEqual(afile, cfile) {
+		t.Error("should not be same")
+		return
+	}
+}
+
 //func TestRevokeFile1(t *testing.T) {
 //	userlib.DatastoreClear()
 //	userlib.KeystoreClear()
