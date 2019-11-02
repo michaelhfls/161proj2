@@ -82,6 +82,7 @@ func bytesToUUID(data []byte) (ret uuid.UUID) {
 type User struct {
 	Username string
 	Files map[uuid.UUID]uuid.UUID // Dictionary with key = encrypted hashed file names, value = encrypted UUID of File-User Node
+
 	DecKey userlib.PKEDecKey // User's private key (RSA)
 	SignKey userlib.DSSignKey // User's private key (Digital Signatures)
 
@@ -427,7 +428,6 @@ func (userdata *User) SetFileNameToUUID(filename string, uuid uuid.UUID) {
 	name, _ := userlib.HMACEval(userdata.HMACKey, []byte(filename))
 	fakeUUID := bytesToUUID(name)
 	userdata.Files[fakeUUID] = uuid
-
 }
 
 // returns true if filename exists
@@ -491,8 +491,6 @@ func (userdata *User) LoadFile(filename string) (data []byte, err error) {
 	var file []byte
 
 	verified := userFile.ValidUsers()
-
-
 	if len(userFile.SavedMeta) > 0 {
 		// Verify signer is a permissible user
 		name := string(userFile.SavedMetaDS[0])
@@ -511,8 +509,8 @@ func (userdata *User) LoadFile(filename string) (data []byte, err error) {
 		}
 
 		// Evaluate items in SavedMeta. We do NOT need to verify each signature.
-		for _, meta := range userFile.SavedMeta {
-			fileBlock, err := EvaluateMetadata(userdata, meta,-1)
+		for i := 0; i < len(userFile.SavedMeta); i++ {
+			fileBlock, err := EvaluateMetadata(userdata, userFile.SavedMeta[i],-1)
 			if err != nil {
 				return nil, err
 			}
@@ -678,8 +676,8 @@ func (userdata *User) ShareFile(filename string, recipient string) (
 		}
 
 		// Add this to the new uf's save
-		for _, meta := range uf.SavedMeta {
-			editor, uuidFile, key, err := userdata.DecryptMeta(-1, meta)
+		for i := 0; i < len(uf.SavedMeta); i++ {
+			editor, uuidFile, key, err := userdata.DecryptMeta(-1, uf.SavedMeta[i])
 			if err != nil {
 				return "", nil
 			}
@@ -692,7 +690,7 @@ func (userdata *User) ShareFile(filename string, recipient string) (
 		n, err := userlib.PKEDec(userdata.DecKey, uf.ChangesMeta[index][0])
 		name := string(n)
 		if err != nil {
-			return "", errors.New("RSA decryption failed")
+			return "", err
 		}
 
 		// Verify that the sender is valid
@@ -718,8 +716,8 @@ func (userdata *User) ShareFile(filename string, recipient string) (
 	for _, UUID := range verified {
 		otherUF, err := RetrieveUserFile(UUID)
 		if err == nil {
-			for _, meta := range otherUF.ChangesMeta {
-				otherUF.TransferChangesToSavedMeta(meta)
+			for i := 0; i < len(otherUF.ChangesMeta); i++ {
+				otherUF.TransferChangesToSavedMeta(otherUF.ChangesMeta[i])
 			}
 
 			otherUF.ChangesMeta = make(map[int][4][]byte)
@@ -779,6 +777,9 @@ func (userdata *User) ReceiveFile(filename string, sender string,
 		return errors.New("file already exists")
 	}
 
+	if len(magicString) <= 256 {
+		return errors.New("magic string not valid")
+	}
 	eUUID := []byte(magicString[:256])
 	msDS := []byte(magicString[256:])
 
@@ -860,11 +861,11 @@ func (userdata *User) RevokeFile(filename string, targetUsername string) (err er
 
 		// Now verify and add changes.
 		for index := 0; index < len(uf.ChangesMeta); index++ {
-			n, err := userlib.PKEDec(userdata.DecKey, uf.ChangesMeta[index][0])
-			name := string(n)
+			n, err := userdata.Decrypt(ogUF.ChangesMeta[index][0])
 			if err != nil {
-				return errors.New("RSA decryption failed")
+				return err //rsa decryption failed
 			}
+			name := string(n)
 
 			// Verify that the sender is valid
 			if _, ok := verified[name]; !ok {
@@ -874,6 +875,8 @@ func (userdata *User) RevokeFile(filename string, targetUsername string) (err er
 			uf.TransferChangesToSavedMeta(uf.ChangesMeta[index])
 		}
 
+		uf.ChangesMeta = make(map[int][4][]byte)
+
 		// Sign and re-upload.
 		msg, _ := json.Marshal(uf.SavedMeta)
 		ds, _ := userlib.DSSign(userdata.SignKey, msg)
@@ -882,6 +885,12 @@ func (userdata *User) RevokeFile(filename string, targetUsername string) (err er
 
 		serialUF, _ := json.Marshal(uf)
 		userlib.DatastoreSet(uf.UUID, serialUF)
+	}
+
+	// Retrieve the UserFile again
+	ogUF, err = RetrieveUserFile(uuidUF)
+	if err != nil {
+		return errors.New("file does not exist")
 	}
 
 	// verify UF.children
