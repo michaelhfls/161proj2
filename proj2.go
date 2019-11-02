@@ -702,7 +702,7 @@ func (userdata *User) ShareFile(filename string, recipient string) (
 		newUF.UpdateSavedMetadata(name, uuidFile, key)
 	}
 
-	// Now sign saved.
+	// Now sign saved for new UF.
 	newUF.SavedMetaDS[0] = []byte(userdata.Username)
 	msg, _ := json.Marshal(newUF.SavedMeta)
 	newUF.SavedMetaDS[1], _ = userlib.DSSign(userdata.SignKey, msg)
@@ -738,8 +738,8 @@ func (userdata *User) ShareFile(filename string, recipient string) (
 	userlib.DatastoreSet(newUF.UUID, serialUF)
 
 	// Reupload our UF
-	serialUF, _ = json.Marshal(newUF)
-	userlib.DatastoreSet(newUF.UUID, serialUF)
+	serialUF, _ = json.Marshal(uf)
+	userlib.DatastoreSet(uf.UUID, serialUF)
 
 	// Generate the magic string: w/ random uuid and signature. encrypted ofc
 	pubKey, _ := GetPublicEncKey(recipient)
