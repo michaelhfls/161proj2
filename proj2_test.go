@@ -325,8 +325,14 @@ func TestShareFile(t *testing.T) {
 		t.Error(error)
 	}
 
-	afile, _ := a.LoadFile("file1")
-	bfile, _ := b.LoadFile("file1")
+	afile, err := a.LoadFile("file1")
+	if err != nil {
+		t.Error(err)
+	}
+	bfile, err := b.LoadFile("file1")
+	if err != nil {
+		t.Error(err)
+	}
 
 	if !reflect.DeepEqual(afile, bfile) {
 		t.Error("patricia and alice are not loading the same files", string(afile), " | ", string(bfile))

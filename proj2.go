@@ -509,14 +509,12 @@ func (userdata *User) LoadFile(filename string) (data []byte, err error) {
 		}
 
 		// Evaluate items in SavedMeta. We do NOT need to verify each signature.
-		for _, elem := range userFile.SavedMeta {
-			fileBlock, err := EvaluateMetadata(userdata, elem,-1)
-			
+		for _, meta := range userFile.SavedMeta {
+			fileBlock, err := EvaluateMetadata(userdata, meta,-1)
 			if err != nil {
 				return nil, err
 			}
 			file = append(file, fileBlock...)
-
 		}
 	}
 
