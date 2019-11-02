@@ -4,7 +4,7 @@ package proj2
 // imports it will break the autograder, and we will be Very Upset.
 
 import (
-	// You neet to add with
+	// You need to add with
 	// go get github.com/cs161-staff/userlib
 	"github.com/cs161-staff/userlib"
 
@@ -211,7 +211,7 @@ func (userFile *UserFile) TransferChangesToSavedMeta(meta [4][]byte) {
 
 // Updates the metadata of a recipient's changes map, with a file update by sender
 func (userFile *UserFile) UpdateMetadata(sender *User, uuidFile uuid.UUID, encKey []byte) {
-	pubKey, _ := GetPublicEncKey(sender.Username)
+	pubKey, _ := GetPublicEncKey(userFile.Username)
 
 	eUsername, _ := userlib.PKEEnc(pubKey, []byte(sender.Username))
 	serial, _ := json.Marshal(uuidFile)
@@ -466,8 +466,6 @@ func (userdata *User) AppendFile(filename string, data []byte) (err error) {
 		uf, err := RetrieveUserFile(uuidUF)
 		if err == nil {
 			uf.UpdateMetadata(userdata, uuidNewFile, encKey)
-			//fmt.Print("---", uf.Username, "//", len(uf.ChangesMeta),
-			//	"//", len(uf.SavedMeta))
 		}
 	}
 
@@ -493,6 +491,8 @@ func (userdata *User) LoadFile(filename string) (data []byte, err error) {
 	var file []byte
 
 	verified := userFile.ValidUsers()
+
+
 	if len(userFile.SavedMeta) > 0 {
 		// Verify signer is a permissible user
 		name := string(userFile.SavedMetaDS[0])
@@ -584,13 +584,14 @@ func (userFile *UserFile) RetrieveOwner() *UserFile {
 		if !ok {
 			break
 		}
-			msg, _ := json.Marshal(userFile.Parent)
-			err = userlib.DSVerify(verKey, msg, userFile.ParentDS)
-			if err != nil {
-				break
-			}
 
-			owner = parent
+		msg, _ := json.Marshal(owner.Parent)
+		err = userlib.DSVerify(verKey, msg, owner.ParentDS)
+		if err != nil {
+			break
+		}
+
+		owner = parent
 	}
 
 	return owner
