@@ -198,7 +198,8 @@ func (userFile *UserFile) UpdateSavedMetadata(sender string, uuidFile uuid.UUID,
 	pubKey, _ := GetPublicEncKey(userFile.Username)
 
 	eUsername, _ := userlib.PKEEnc(pubKey, []byte(sender))
-	eUUID, _ := userlib.PKEEnc(pubKey, []byte(uuidFile.String()))
+	serial, _ := json.Marshal(uuidFile)
+	eUUID, _ := userlib.PKEEnc(pubKey, serial)
 	eKey, _ := userlib.PKEEnc(pubKey, encKey)
 
 	userFile.SavedMeta[len(userFile.SavedMeta)] = [4][]byte{eUsername, eUUID, eKey, nil}
@@ -213,7 +214,8 @@ func (userFile *UserFile) UpdateMetadata(sender *User, uuidFile uuid.UUID, encKe
 	pubKey, _ := GetPublicEncKey(sender.Username)
 
 	eUsername, _ := userlib.PKEEnc(pubKey, []byte(sender.Username))
-	eUUID, _ := userlib.PKEEnc(pubKey, []byte(uuidFile.String()))
+	serial, _ := json.Marshal(uuidFile)
+	eUUID, _ := userlib.PKEEnc(pubKey, serial)
 	eKey, _ := userlib.PKEEnc(pubKey, encKey)
 
 	msg := string(len(userFile.ChangesMeta)) + string(eUUID) + string(eKey)
