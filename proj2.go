@@ -175,7 +175,7 @@ func (userdata *User) NewUserFile(username string, UUID uuid.UUID, parent uuid.U
 	}
 
 	f.SavedMeta = make(map[int][4][]byte)
-	f.ChangesMeta = make(map[int][4][]byte)
+	f.ChangesMeta = make(map[int][4][]byte) // todo: index thingyy
 	return &f
 }
 
@@ -441,6 +441,9 @@ func (userdata *User) GetUUIDFromFileName(filename string) (uuid uuid.UUID, ok b
 // existing file, but only whatever additional information and
 // metadata you need.
 func (userdata *User) AppendFile(filename string, data []byte) (err error) {
+	// Upload file
+	uuidNewFile, encKey := UploadFile(data, userdata.SignKey)
+
 	// need to retrieve the userfile
 	uuidUserFile, ok := userdata.GetUUIDFromFileName(filename)
 
@@ -453,6 +456,7 @@ func (userdata *User) AppendFile(filename string, data []byte) (err error) {
 		return errors.New("Userfile for this file does not exist")
 	}
 
+<<<<<<< HEAD
 	// Upload file
 	uuidNewFile, encKey := UploadFile(data, userdata.SignKey)
 
@@ -466,15 +470,24 @@ func (userdata *User) AppendFile(filename string, data []byte) (err error) {
 
 	userFile.UpdateAllMetadata(userdata, uuidNewFile, encKey)
 =======
+=======
+>>>>>>> 101037a2debcf38aa06d84b0d0eef89889aecb8d
 	// Verify children; update metadata for all verified.
 	verified := userFile.ValidUsers()
+
 	for _, uuidUF := range verified {
 		uf, err := RetrieveUserFile(uuidUF)
 		if err == nil {
 			uf.UpdateMetadata(userdata, uuidNewFile, encKey)
+			//fmt.Print("---", uf.Username, "//", len(uf.ChangesMeta),
+			//	"//", len(uf.SavedMeta))
 		}
 	}
+<<<<<<< HEAD
 >>>>>>> 3cb64ff8a7d297bc4a92756e6eb32071ea52a7a2
+=======
+
+>>>>>>> 101037a2debcf38aa06d84b0d0eef89889aecb8d
 	return nil
 }
 
@@ -518,6 +531,7 @@ func (userdata *User) LoadFile(filename string) (data []byte, err error) {
 		// Evaluate items in SavedMeta. We do NOT need to verify each signature.
 		for _, elem := range userFile.SavedMeta {
 			fileBlock, err := EvaluateMetadata(userdata, elem,-1)
+			
 			if err != nil {
 				return nil, err
 			}
@@ -726,6 +740,8 @@ func (userdata *User) ShareFile(filename string, recipient string) (
 				otherUF.TransferChangesToSavedMeta(meta)
 			}
 
+			otherUF.ChangesMeta = make(map[int][4][]byte)
+
 			// Sign and re-upload.
 			msg, _ := json.Marshal(otherUF.SavedMeta)
 			ds, _ := userlib.DSSign(userdata.SignKey, msg)
@@ -735,6 +751,12 @@ func (userdata *User) ShareFile(filename string, recipient string) (
 			serialUF, _ := json.Marshal(otherUF)
 			userlib.DatastoreSet(otherUF.UUID, serialUF)
 		}
+	}
+
+	// Retrieve the UserFile again
+	uf, err = RetrieveUserFile(uuidUF)
+	if err != nil {
+		return "", errors.New("file does not exist")
 	}
 
 	// Include the new UF in our children. Sign it.
@@ -747,7 +769,7 @@ func (userdata *User) ShareFile(filename string, recipient string) (
 	serialUF, _ := json.Marshal(newUF)
 	userlib.DatastoreSet(newUF.UUID, serialUF)
 
-	// Reupload our UF
+	// Re upload our UF
 	serialUF, _ = json.Marshal(uf)
 	userlib.DatastoreSet(uf.UUID, serialUF)
 
