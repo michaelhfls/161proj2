@@ -4,15 +4,16 @@ package proj2
 // imports it will break the autograder, and we will be Very Upset.
 
 import (
+	"github.com/cs161-staff/userlib"
+	"reflect"
+	"testing"
+	_ "strconv"
+	_ "errors"
+	_ "strings"
+	_ "github.com/google/uuid"
 	_ "encoding/hex"
 	_ "encoding/json"
-	_ "errors"
-	"github.com/cs161-staff/userlib"
-	_ "github.com/google/uuid"
-	"reflect"
-	_ "strconv"
-	_ "strings"
-	"testing"
+
 )
 
 //func TestInit(t *testing.T) {
@@ -324,8 +325,14 @@ func TestShareFile(t *testing.T) {
 		t.Error(error)
 	}
 
-	afile, _ := a.LoadFile("file1")
-	bfile, _ := b.LoadFile("file1")
+	afile, err := a.LoadFile("file1")
+	if err != nil {
+		t.Error(err)
+	}
+	bfile, err := b.LoadFile("file1")
+	if err != nil {
+		t.Error(err)
+	}
 
 	if !reflect.DeepEqual(afile, bfile) {
 		t.Error("patricia and alice are not loading the same files", string(afile), " | ", string(bfile))

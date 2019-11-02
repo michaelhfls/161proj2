@@ -29,7 +29,7 @@ import (
 	"errors"
 
 	// optional
-
+	_ "strconv"
 
 	// if you are looking for fmt, we don't give you fmt, but you can use userlib.DebugMsg
 	// see someUsefulThings() below
@@ -221,6 +221,7 @@ func (userFile *UserFile) UpdateMetadata(sender *User, uuidFile uuid.UUID, encKe
 
 	// todo: need to change the index shit. bc we change index every time we add to saved. or do we need to update this????
 	userFile.ChangesMeta[len(userFile.ChangesMeta)] = [4][]byte{eUsername, eUUID, eKey, ds}
+
 	serialUF, _ := json.Marshal(userFile)
 	userlib.DatastoreSet(userFile.UUID, serialUF)
 }
@@ -453,25 +454,9 @@ func (userdata *User) AppendFile(filename string, data []byte) (err error) {
 
 	userFile, err := RetrieveUserFile(uuidUserFile)
 	if err != nil {
-		return errors.New("Userfile for this file does not exist")
+		return err
 	}
 
-<<<<<<< HEAD
-	// Upload file
-	uuidNewFile, encKey := UploadFile(data, userdata.SignKey)
-
-<<<<<<< HEAD
-	// retrieve owner of file
-
-	userFile = userFile.RetrieveOwner()
-	//for err == nil && userFile.Parent != uuid.Nil {
-	//	userFile, err = RetrieveUserFile(userFile.Parent)
-	//}
-
-	userFile.UpdateAllMetadata(userdata, uuidNewFile, encKey)
-=======
-=======
->>>>>>> 101037a2debcf38aa06d84b0d0eef89889aecb8d
 	// Verify children; update metadata for all verified.
 	verified := userFile.ValidUsers()
 
@@ -483,11 +468,7 @@ func (userdata *User) AppendFile(filename string, data []byte) (err error) {
 			//	"//", len(uf.SavedMeta))
 		}
 	}
-<<<<<<< HEAD
->>>>>>> 3cb64ff8a7d297bc4a92756e6eb32071ea52a7a2
-=======
 
->>>>>>> 101037a2debcf38aa06d84b0d0eef89889aecb8d
 	return nil
 }
 
@@ -500,7 +481,6 @@ func (userdata *User) LoadFile(filename string) (data []byte, err error) {
 	if !ok {
 		return nil, errors.New("file does not exist")
 	}
-
 
 	userFile, err := RetrieveUserFile(uuidUF)
 
@@ -529,14 +509,12 @@ func (userdata *User) LoadFile(filename string) (data []byte, err error) {
 		}
 
 		// Evaluate items in SavedMeta. We do NOT need to verify each signature.
-		for _, elem := range userFile.SavedMeta {
-			fileBlock, err := EvaluateMetadata(userdata, elem,-1)
-			
+		for _, meta := range userFile.SavedMeta {
+			fileBlock, err := EvaluateMetadata(userdata, meta,-1)
 			if err != nil {
 				return nil, err
 			}
 			file = append(file, fileBlock...)
-
 		}
 	}
 
@@ -552,6 +530,7 @@ func (userdata *User) LoadFile(filename string) (data []byte, err error) {
 		if _, ok := verified[string(username)]; !ok {
 			return file, errors.New("rest of file corrupted")
 		}
+
 		fileBlock, err := EvaluateMetadata(userdata, userFile.ChangesMeta[index], index)
 		if err != nil {
 			return file, err
